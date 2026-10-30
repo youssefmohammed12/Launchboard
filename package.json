@@ -1,0 +1,59 @@
+{
+  "name": "launchboard-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "server"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "dev:domain": "npm run watch --workspace @launchboard/domain",
+    "dev:server": "npm run dev --workspace @launchboard/server",
+    "build:domain": "npm run build --workspace @launchboard/domain",
+    "build:server": "npm run build --workspace @launchboard/server",
+    "start:server": "npm run start --workspace @launchboard/server",
+    "typecheck:server": "npm run typecheck --workspace @launchboard/server",
+    "predev": "npm run build:domain",
+    "predev:server": "npm run build:domain",
+    "prebuild": "npm run build:domain",
+    "prebuild:server": "npm run build:domain",
+    "prestart:server": "npm run build:domain",
+    "pretypecheck:server": "npm run build:domain",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "pretest": "npm run build:domain",
+    "test": "vitest run && npm run test:server",
+    "pretest:watch": "npm run build:domain",
+    "test:watch": "vitest",
+    "pretest:server": "npm run build:domain",
+    "test:server": "npm run test --workspace @launchboard/server",
+    "db:migrate": "npm run db:migrate --workspace @launchboard/server",
+    "db:migrate:compiled": "npm run db:migrate:compiled --workspace @launchboard/server",
+    "pretest:focus": "npm run build:domain",
+    "test:focus": "node focus-test.cjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@launchboard/domain": "*",
+    "lucide-react": "^0.460.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^27.4.0",
+    "playwright": "1.57.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~5.6.3",
+    "vite": "^6.4.5",
+    "vitest": "^4.1.12"
+  }
+}

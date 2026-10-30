@@ -1,0 +1,85 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: #faf8f4;
+  --color-surface: #ffffff;
+  --color-sidebar: #17212b;
+  --color-sidebar-text: #c9d2da;
+  --color-text: #1f2528;
+  --color-muted: #5b666d;
+  --color-border: #e4e0d8;
+  --color-accent: #2f7f79;
+  --color-accent-dark: #256660;
+  --color-accent-soft: #e2f1ef;
+  --color-danger: #b3382c;
+  --color-warn: #8a5a00;
+  --color-badge: #eceae4;
+  --color-badge-text: #3d464b;
+  --color-status-applied: #e1ecf7;
+  --color-status-applied-text: #1d4f82;
+  --color-status-interview: #fff1d6;
+  --color-status-rejected: #f7e1de;
+  --color-table-head: #fbfaf7;
+
+  --radius-card: 10px;
+  --radius-control: 6px;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 1px 2px rgba(23, 33, 43, 0.06), 0 2px 8px rgba(23, 33, 43, 0.04);
+  --shadow-modal: 0 12px 40px rgba(23, 33, 43, 0.25);
+
+  --spacing-s1: 4px;
+  --spacing-s2: 8px;
+  --spacing-s3: 12px;
+  --spacing-s4: 16px;
+  --spacing-s5: 24px;
+  --spacing-s6: 32px;
+
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+/*
+ * Base layer: global element defaults plus the small set of design-token
+ * aliases used by those defaults. Component presentation lives in Tailwind
+ * utilities in the React source.
+ */
+@layer base {
+  /*
+   * Only the aliases referenced by the base element rules below are retained.
+   * The complete color, spacing, radius, and shadow scales live in @theme for
+   * use by Tailwind utilities.
+   */
+  :root {
+    --bg: var(--color-bg);
+    --text: var(--color-text);
+    --muted: var(--color-muted);
+    --accent: var(--color-accent);
+    --accent-dark: var(--color-accent-dark);
+    --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px;
+    font-family: var(--font-sans);
+    color: var(--text);
+  }
+
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-sans); line-height: 1.5; }
+  h1 { font-size: 1.6rem; font-weight: 700; margin: 0 0 var(--s1); letter-spacing: -0.01em; }
+  h2 { font-size: 1.05rem; font-weight: 700; margin: 0 0 var(--s3); }
+  h3 { font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: var(--s4) 0 var(--s1); }
+  p { margin: 0 0 var(--s2); }
+  /*
+   * Preflight sets `text-decoration: inherit` on links, which removes the
+   * underline the application link used to have. The original stylesheet never
+   * touched text-decoration, so the underline is part of the current design
+   * and the affordance that shows the URL is clickable.
+   */
+  a { color: var(--accent-dark); overflow-wrap: anywhere; text-decoration: underline; }
+  /*
+   * Preflight renders placeholders as a 50% transparent version of the text
+   * colour, which drops the contrast of the search and URL hints to roughly
+   * 3:1. The muted token is the colour the design already uses for secondary
+   * text and keeps the hints readable.
+   */
+  ::placeholder { color: var(--muted); opacity: 1; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .sr-only { @apply absolute h-px w-px overflow-hidden whitespace-nowrap; clip: rect(0 0 0 0); }
+}
+

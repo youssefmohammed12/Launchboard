@@ -1,0 +1,23 @@
+{
+  "name": "@launchboard/domain",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Environment-independent Launchboard domain contracts and pure rules.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}
