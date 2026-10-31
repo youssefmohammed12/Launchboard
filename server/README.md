@@ -51,6 +51,7 @@ server/
     test/                      # Node-environment Vitest tests and fixtures
   database/
     create-database.sql        # explicit, one-time database bootstrap
+    provision-accounts.sql     # editable two-account grant template
     migrations/
       001_initial_schema.sql
   .env.example
@@ -108,15 +109,18 @@ It contains no `DROP`, no `USE`, and no reference to `healthbridge` or
 
 Create **two** dedicated accounts restricted to `launchboard.*`. Replace the
 placeholders with your own values; do not use the MySQL `root` account and do
-not reuse another project's credentials.
+not reuse another project's credentials. Use the host that matches `DB_HOST`
+(`127.0.0.1` below); an account created only for `'localhost'` may not match a
+TCP connection to `127.0.0.1`.
 
 The runtime account serves the application and readiness checks. It needs data
 access only:
 
 ```sql
-CREATE USER 'launchboard_app'@'localhost' IDENTIFIED BY '<runtime-password>';
+CREATE USER 'launchboard_app'@'127.0.0.1'
+  IDENTIFIED BY '<runtime-password>';
 GRANT SELECT, INSERT, UPDATE, DELETE
-  ON launchboard.* TO 'launchboard_app'@'localhost';
+  ON launchboard.* TO 'launchboard_app'@'127.0.0.1';
 ```
 
 The migration account is used only by `npm run db:migrate`. It needs the DDL
@@ -124,10 +128,16 @@ privileges required by the current migration and future additive migrations,
 plus the data access needed to read and record migration history:
 
 ```sql
-CREATE USER 'launchboard_migrator'@'localhost' IDENTIFIED BY '<migration-password>';
+CREATE USER 'launchboard_migrator'@'127.0.0.1'
+  IDENTIFIED BY '<migration-password>';
 GRANT CREATE, ALTER, INDEX, REFERENCES, SELECT, INSERT
-  ON launchboard.* TO 'launchboard_migrator'@'localhost';
+  ON launchboard.* TO 'launchboard_migrator'@'127.0.0.1';
 ```
+
+`server/database/provision-accounts.sql` is an editable template containing the
+same statements with unmistakable password placeholders. It is intended to be
+run once by an administrator after editing the passwords. Never execute it
+unchanged, never commit real credentials, and do not grant global privileges.
 
 `CREATE` is needed to create tables, including `schema_migrations`. `ALTER`,
 `INDEX` and `REFERENCES` are needed for additive schema changes and foreign
@@ -143,6 +153,46 @@ migrations exist.
 Copy `server/.env.example` to `server/.env` manually and set the values. Never
 commit `.env`; `server/.gitignore` excludes it. Do not create a real `.env` as
 part of a code change.
+
+### Controlled live-integration checklist
+
+Do not run these steps until you intend to provision the database. Preparing the
+repository does not connect to MariaDB or execute SQL.
+
+1. Start MySQL/MariaDB from the XAMPP Control Panel and confirm the service is
+   running.
+2. Run the database bootstrap as an administrator. This creates only
+   `launchboard`:
+
+   ```bash
+   mysql -u <admin-user> -p -h 127.0.0.1 < server/database/create-database.sql
+   ```
+
+3. Edit `server/database/provision-accounts.sql`, replace both password
+   placeholders, then run it once as an administrator:
+
+   ```bash
+   mysql -u <admin-user> -p -h 127.0.0.1 < server/database/provision-accounts.sql
+   ```
+
+4. Verify the grants with `SHOW GRANTS` for both accounts. The runtime account
+   must have no DDL privileges, and neither account may have global privileges.
+5. Copy `server/.env.example` to `server/.env` and set `DB_PASSWORD` and
+   `DB_MIGRATION_PASSWORD` to the generated values. Keep `DB_HOST=127.0.0.1`,
+   `DB_PORT=3306`, `DB_NAME=launchboard`, `DB_USER=launchboard_app` and
+   `DB_MIGRATION_USER=launchboard_migrator`.
+6. Confirm the environment file is ignored: `git check-ignore -v server/.env`
+   must report the ignore rule. Never commit `.env`.
+7. Run `npm run db:migrate`. It must print the verified `launchboard` target and
+   use only the migration account. It must never fall back to the runtime
+   account.
+8. Start the backend with `npm run dev:server` or `npm run start:server`. The
+   process uses only the runtime account.
+9. Request `GET /api/ready` and expect `200 {"status":"ok","db":"ok"}`. Request
+   `GET /api/health` and expect `200 {"status":"ok"}` independently of database
+   state.
+10. If a migration fails partway, stop and inspect the partial schema. Do not
+    drop tables automatically; see the recovery limitations below.
 
 ## Environment configuration
 
@@ -249,6 +299,8 @@ The runner:
 - creates `schema_migrations` if it does not exist;
 - reads `server/database/migrations/*.sql` in filename order;
 - records `version`, SHA-256 `checksum` and `applied_at` (UTC) for each success;
+  checksums normalize CRLF and standalone CR to LF before hashing, so Windows and
+  Linux checkouts agree, and `.gitattributes` pins SQL files to LF;
 - skips already applied migrations only when the recorded checksum matches;
 - refuses to run when an applied checksum has drifted or an applied migration
   file is missing;
@@ -302,6 +354,31 @@ The contract leaves opportunity `title`, `company`, `compensation`,
 `TEXT`/`MEDIUMTEXT` and does not invent permanent limits. Practical storage
 limits are about 64 KiB for `TEXT` and 16 MiB for `MEDIUMTEXT`; these are not
 product rules. Finalize the caps before enabling public mutation endpoints.
+
+### MariaDB compatibility notes (static audit)
+
+The target environment is MariaDB 10.4.32. Static inspection indicates that the
+schema uses supported features: `CHECK` constraints (enforced from MariaDB
+10.2), `DATETIME(3)`, `DATE`, `TIME`, `utf8mb4_unicode_ci`, composite foreign
+keys, `BIGINT UNSIGNED AUTO_INCREMENT`, and the statement forms used by the
+migration runner. No live compatibility test has been performed.
+
+Two environment assumptions should be confirmed during the controlled live
+integration:
+
+- The local `my.ini` uses
+  `sql_mode=NO_ZERO_IN_DATE,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION`, which is not
+  strict mode. Application validation remains authoritative, but consider
+  enabling `STRICT_TRANS_TABLES` for the server or session so missing or
+  overlong values fail instead of being coerced.
+- The schema relies on InnoDB's default `DYNAMIC` row format for the
+  `VARCHAR(254)` utf8mb4 email unique index. MariaDB 10.4 defaults to
+  `DYNAMIC`; confirm the server setting if it has been customized.
+
+The composite interview-to-contact foreign key uses `ON DELETE RESTRICT`.
+Deleting an opportunity cascades to both interviews and contacts, so the future
+opportunity delete path should delete interviews before contacts, or live
+integration must confirm that InnoDB processes the cascades in a safe order.
 
 ## Validation policy
 

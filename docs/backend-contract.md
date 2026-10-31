@@ -154,12 +154,19 @@ DB_PORT=3306
 DB_NAME=launchboard
 DB_USER=launchboard_app
 DB_PASSWORD=...
+DB_MIGRATION_USER=launchboard_migrator
+DB_MIGRATION_PASSWORD=...
 SESSION_COOKIE_NAME=launchboard_session
 SESSION_TTL_DAYS=14
 COOKIE_SECURE=false
 ```
 
-Never commit `.env`. Use a dedicated database user with privileges only on `launchboard.*`; never the MySQL root account. Do not touch `healthbridge` or `nova_home`.
+Never commit `.env`. Use **two** dedicated accounts with privileges only on
+`launchboard.*`; never the MySQL root account. The runtime account has only
+`SELECT`, `INSERT`, `UPDATE` and `DELETE`. The migration account has `CREATE`,
+`ALTER`, `INDEX`, `REFERENCES`, `SELECT` and `INSERT` for schema changes and
+migration history. Neither account receives global privileges or access to
+another database. Do not touch `healthbridge` or `nova_home`.
 
 ---
 
@@ -168,6 +175,7 @@ Never commit `.env`. Use a dedicated database user with privileges only on `laun
 ### 4.1 Conventions
 
 - Database: `launchboard` only. InnoDB, `utf8mb4`, `utf8mb4_unicode_ci` for general text.
+- Runtime and migration use separate accounts. The runtime account has `SELECT`, `INSERT`, `UPDATE` and `DELETE` on `launchboard.*`; the migration account has `CREATE`, `ALTER`, `INDEX`, `REFERENCES`, `SELECT` and `INSERT`. Neither account has global privileges or access to another database.
 - IDs and enum values use binary/ASCII collations so casing is enforced.
 - All application timestamps are `DATETIME(3)` stored in UTC. Connections set `time_zone = '+00:00'`; the API returns ISO 8601 with `Z`.
 - Calendar dates use `DATE`; interview times use `TIME`; neither is converted to a timestamp.
@@ -820,7 +828,7 @@ Everything else in this document is specific enough to implement without renegot
 
 Stages 3 and 4 are implemented at the foundation level only:
 
-- `server/src/config/env.ts` parses the optional `DB_*` block and rejects any `DB_NAME` other than `launchboard`.
+- `server/src/config/env.ts` parses the optional runtime `DB_*` block separately from the migration-only `DB_MIGRATION_USER` and `DB_MIGRATION_PASSWORD`. It rejects any `DB_NAME` other than `launchboard`; neither credential set falls back to the other.
 - `server/src/db/pool.ts` owns one bounded `mysql2/promise` pool, sets `time_zone = '+00:00'` on every acquired connection, and verifies `SELECT DATABASE()` before reporting readiness.
 - `GET /api/ready` performs that read-only check; it never migrates or writes. `GET /api/health` remains independent of the database.
 - `server/database/create-database.sql` is a deliberate, one-time administrator action. It only creates `launchboard`.
@@ -859,7 +867,7 @@ MySQL/MariaDB DDL implicitly commits, so a migration is not transactionally atom
 
 ### 11.4 Database and operations
 
-- Dedicated database `launchboard`; dedicated user with privileges on `launchboard.*` only. Never root, never `healthbridge`, never `nova_home`.
+- Dedicated database `launchboard`; two dedicated accounts with privileges on `launchboard.*` only. The runtime account is limited to data access; the migration account owns schema changes and migration tracking. Never root, never `healthbridge`, never `nova_home`.
 - `.env` is git-ignored; `.env.example` documents names with placeholder values.
 - Backups of the `launchboard` database are the operator's responsibility; the JSON export is a user-facing feature, not a database backup.
 - Migrations are forward-only and recorded in `schema_migrations`. No destructive migration runs automatically in production.

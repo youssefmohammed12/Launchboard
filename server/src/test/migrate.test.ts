@@ -125,6 +125,19 @@ describe('SQL statement splitting', () => {
   });
 });
 
+describe('checksum portability', () => {
+  const lf = 'CREATE TABLE a (id INT);\nSELECT 1;\n';
+
+  it('produces the same checksum for LF, CRLF and standalone CR', () => {
+    expect(checksumSql(lf.replace(/\n/g, '\r\n'))).toBe(checksumSql(lf));
+    expect(checksumSql(lf.replace(/\n/g, '\r'))).toBe(checksumSql(lf));
+  });
+
+  it('still distinguishes real SQL content changes', () => {
+    expect(checksumSql(lf.replace('INT', 'BIGINT'))).not.toBe(checksumSql(lf));
+  });
+});
+
 describe('migration loading', () => {
   it('loads files in deterministic filename order with normalized checksums', async () => {
     await withMigrations(
@@ -365,6 +378,9 @@ describe('initial schema and bootstrap invariants', () => {
   const bootstrapPath = fileURLToPath(
     new URL('../../database/create-database.sql', import.meta.url),
   );
+  const provisioningPath = fileURLToPath(
+    new URL('../../database/provision-accounts.sql', import.meta.url),
+  );
 
   it('creates every documented table', () => {
     const schema = readFileSync(schemaPath, 'utf8');
@@ -407,6 +423,27 @@ describe('initial schema and bootstrap invariants', () => {
     }
     expect(bootstrap).toContain('CREATE DATABASE IF NOT EXISTS launchboard');
     expect(bootstrap).not.toMatch(/CREATE USER|GRANT/i);
+  });
+
+  it('provisions two launchboard-only accounts on the configured host', () => {
+    const provisioning = readFileSync(provisioningPath, 'utf8');
+
+    expect(provisioning).toContain("'launchboard_app'@'127.0.0.1'");
+    expect(provisioning).toContain("'launchboard_migrator'@'127.0.0.1'");
+    expect(provisioning).toMatch(
+      /GRANT SELECT, INSERT, UPDATE, DELETE\s+ON launchboard\.\*/,
+    );
+    expect(provisioning).toMatch(
+      /GRANT CREATE, ALTER, INDEX, REFERENCES, SELECT, INSERT\s+ON launchboard\.\*/,
+    );
+    expect(provisioning).toContain('<REPLACE_WITH_RUNTIME_PASSWORD>');
+    expect(provisioning).toContain('<REPLACE_WITH_MIGRATION_PASSWORD>');
+
+    expect(provisioning).not.toMatch(/healthbridge|nova_home/i);
+    expect(provisioning).not.toMatch(/\bWITH\s+GRANT\s+OPTION\b/i);
+    expect(provisioning).not.toMatch(/ON\s+\*\.\*/i);
+    expect(provisioning).not.toMatch(/\bDROP\s+(TABLE|DATABASE|USER)\b/i);
+    expect(provisioning).not.toMatch(/\bCREATE\s+DATABASE\b/i);
   });
 });
 

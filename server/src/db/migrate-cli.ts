@@ -3,6 +3,8 @@ import {
   loadEnvFile,
   parseMigrationDatabaseEnv,
 } from '../config/env.js';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   MigrationError,
   runMigrations,
@@ -12,7 +14,7 @@ import { createDatabasePool } from './pool.js';
 
 const PREFIX = '[launchboard-db]';
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   try {
     loadEnvFile();
   } catch (error) {
@@ -46,7 +48,15 @@ async function main(): Promise<void> {
     return;
   }
 
-  const pool = createDatabasePool(config);
+  let pool: ReturnType<typeof createDatabasePool>;
+  try {
+    pool = createDatabasePool(config);
+  } catch {
+    console.error(`${PREFIX} Could not initialize the database pool.`);
+    process.exitCode = 1;
+    return;
+  }
+
   try {
     const result = await runMigrations(pool as unknown as MigrationPool, {
       log: (message) => console.log(`${PREFIX} ${message}`),
@@ -65,9 +75,15 @@ async function main(): Promise<void> {
     try {
       await pool.end();
     } catch {
-      // A close failure must not hide the migration result.
+      // A close failure must not hide the migration result or error.
     }
   }
 }
 
-void main();
+const isDirectExecution =
+  process.argv[1] !== undefined &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectExecution) {
+  void main();
+}

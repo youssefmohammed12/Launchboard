@@ -34,9 +34,11 @@ Process environment: `NODE_ENV` (`development` default; also `test` and `product
 
 The optional database block uses `DB_HOST` (`127.0.0.1` default), `DB_PORT` (`3306` default), `DB_NAME` (required, must be exactly `launchboard`), `DB_USER` and `DB_PASSWORD`. Leave all five unset to run without a database. Invalid configuration stops startup with a safe message that names the setting but never prints its value.
 
+Schema migrations use a separate credential pair: `DB_MIGRATION_USER` and `DB_MIGRATION_PASSWORD`. They are required only for `npm run db:migrate`, never fall back to `DB_USER` or `DB_PASSWORD`, and are never used by the application server. See [`server/README.md`](server/README.md) for provisioning two dedicated `launchboard` accounts and the privileges each needs.
+
 `/api/health` is process liveness only and never touches the database. `/api/ready` returns `200 {status:"ok",db:"ok"}` only when a connection succeeds, the selected database is exactly `launchboard`, and `SELECT 1` works; otherwise it returns a safe `503 NOT_READY` envelope. It never runs migrations or writes data.
 
-Database provisioning is a separate administrator action. `server/database/create-database.sql` creates only `launchboard`; the server never creates or drops databases on startup, and the migration runner refuses any other target. See [`server/README.md`](server/README.md) for provisioning, the dedicated user grant, migration recovery limits, and the unverified live-integration status.
+Database provisioning is a separate administrator action. `server/database/create-database.sql` creates only `launchboard`; the server never creates or drops databases on startup, and the migration runner refuses any other target. See [`server/README.md`](server/README.md) for the two dedicated account grants, the controlled live-integration checklist, migration recovery limits, and the unverified live-integration status.
 
 ## Styling
 Tailwind CSS v4 is configured through `@tailwindcss/vite`. The `@theme` tokens and global/base/accessibility rules live in `src/styles.css`; page and component presentation uses Tailwind utilities. There is no separate semantic component stylesheet.

@@ -69,10 +69,13 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 `.trim();
 
-/** Normalizes line endings before hashing so CRLF and LF checkouts agree. */
+/**
+ * Normalizes CRLF and standalone CR to LF before hashing so Windows and Linux
+ * checkouts of identical SQL agree.
+ */
 export function checksumSql(sql: string): string {
   return createHash('sha256')
-    .update(sql.replace(/\r\n/g, '\n'))
+    .update(sql.replace(/\r\n?/g, '\n'))
     .digest('hex');
 }
 
