@@ -223,6 +223,28 @@ describe('parseBackupJson', () => {
     });
   });
 
+  it('uses the shared server-safe ID limit for browser backup imports', () => {
+    const tooLongId = {
+      ...minimalRecord,
+      id: 'x'.repeat(129),
+    };
+    const result = parseBackupJson(
+      JSON.stringify(envelope({ opportunities: [tooLongId] })),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.backup.validRecords).toBe(0);
+    expect(result.backup.invalidRecords).toBe(1);
+    expect(result.backup.skipped).toEqual([
+      {
+        index: 0,
+        id: tooLongId.id,
+        reason: 'The record ID exceeds the supported length.',
+      },
+    ]);
+  });
+
   it('rejects invalid JSON and arbitrary JSON values', () => {
     expect(parseBackupJson('{not-json')).toMatchObject({
       ok: false,

@@ -31,6 +31,7 @@
     "test:server": "npm run test --workspace @launchboard/server",
     "db:migrate": "npm run db:migrate --workspace @launchboard/server",
     "db:migrate:compiled": "npm run db:migrate:compiled --workspace @launchboard/server",
+    "db:verify-live": "npm run db:verify-live --workspace @launchboard/server",
     "pretest:focus": "npm run build:domain",
     "test:focus": "node focus-test.cjs",
     "typecheck": "tsc --noEmit"

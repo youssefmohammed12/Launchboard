@@ -45,8 +45,8 @@ interface Props {
   onEdit: () => void;
   onClose: () => void;
   /** Persists archive/restore before the app updates its collection. */
-  onArchive: (id: string) => ArchiveOperationResult;
-  onRestore: (id: string) => ArchiveOperationResult;
+  onArchive: (id: string) => ArchiveOperationResult | Promise<ArchiveOperationResult>;
+  onRestore: (id: string) => ArchiveOperationResult | Promise<ArchiveOperationResult>;
   onAddActivity: (id: string, data: ActivityDraft) => MutationOutcome;
   onRemoveActivity: (id: string, activityId: string) => MutationOutcome;
   onAddInterview: (id: string, data: InterviewDraft) => MutationOutcome;
@@ -129,6 +129,8 @@ export function DetailsDialog({
     kind: 'success' | 'error';
     message: string;
   } | null>(null);
+  const [activityBusy, setActivityBusy] = useState(false);
+  const [archiveBusy, setArchiveBusy] = useState(false);
 
   const archived = isArchived(item);
   const focusId = focusTarget ? detailsRecordId(focusTarget.category, focusTarget.id) : undefined;
@@ -141,9 +143,20 @@ export function DetailsDialog({
     target?.scrollIntoView?.({ block: 'center' });
   }, [focusId]);
 
-  const handleArchiveToggle = () => {
-    const result = archived ? onRestore(item.id) : onArchive(item.id);
-    setArchiveFeedback({ kind: result.ok ? 'success' : 'error', message: result.message });
+  const handleArchiveToggle = async () => {
+    if (archiveBusy) return;
+    setArchiveBusy(true);
+    try {
+      const result = await (archived ? onRestore(item.id) : onArchive(item.id));
+      setArchiveFeedback({ kind: result.ok ? 'success' : 'error', message: result.message });
+    } catch {
+      setArchiveFeedback({
+        kind: 'error',
+        message: 'The archive change could not be saved. Please refresh and try again.',
+      });
+    } finally {
+      setArchiveBusy(false);
+    }
   };
 
   const rows: [string, string][] = [
@@ -154,41 +167,57 @@ export function DetailsDialog({
   ];
   const activities = sortActivities(item.activities);
 
-  const handleAddActivity = (event: FormEvent<HTMLFormElement>) => {
+  const handleAddActivity = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (activityBusy) return;
     const nextErrors: ActivityErrors = {};
     if (!activityType) nextErrors.type = 'Choose an activity type.';
     if (!isValidISODate(activityDate)) nextErrors.date = 'Choose a valid activity date.';
     if (activityNote.length > 500) nextErrors.note = 'Notes must be 500 characters or fewer.';
     setActivityErrors(nextErrors);
-    if (nextErrors.type || nextErrors.date || nextErrors.note) return;
-    if (!activityType) return;
-    const saved = onAddActivity(item.id, {
-      type: activityType,
-      date: activityDate,
-      note: activityNote.trim(),
-    });
-    if (saved === false) {
-      // Keep the typed values so the activity can be retried.
+    if (nextErrors.type || nextErrors.date || nextErrors.note || !activityType) return;
+
+    setActivityBusy(true);
+    try {
+      const saved = await onAddActivity(item.id, {
+        type: activityType,
+        date: activityDate,
+        note: activityNote.trim(),
+      });
+      if (saved === false) {
+        // Keep the typed values so the activity can be retried.
+        setActivitySaveError(SAVE_FAILURE_MESSAGE);
+        return;
+      }
+      setActivitySaveError(null);
+      setActivityType('');
+      setActivityDate(toISODate(new Date()));
+      setActivityNote('');
+      setActivityErrors({});
+    } catch {
       setActivitySaveError(SAVE_FAILURE_MESSAGE);
-      return;
+    } finally {
+      setActivityBusy(false);
     }
-    setActivitySaveError(null);
-    setActivityType('');
-    setActivityDate(toISODate(new Date()));
-    setActivityNote('');
-    setActivityErrors({});
   };
 
-  const handleRemoveActivity = (activityId: string) => {
-    const saved = onRemoveActivity(item.id, activityId);
-    if (saved === false) {
-      // Keep the confirmation visible so the removal can be retried.
+  const handleRemoveActivity = async (activityId: string) => {
+    if (activityBusy) return;
+    setActivityBusy(true);
+    try {
+      const saved = await onRemoveActivity(item.id, activityId);
+      if (saved === false) {
+        // Keep the confirmation visible so the removal can be retried.
+        setActivitySaveError(SAVE_FAILURE_MESSAGE);
+        return;
+      }
+      setActivitySaveError(null);
+      setPendingRemoveId(null);
+    } catch {
       setActivitySaveError(SAVE_FAILURE_MESSAGE);
-      return;
+    } finally {
+      setActivityBusy(false);
     }
-    setActivitySaveError(null);
-    setPendingRemoveId(null);
   };
 
   return (
@@ -344,8 +373,8 @@ export function DetailsDialog({
               )}
             </div>
             <div className="col-span-2 flex justify-end max-[640px]:col-span-1">
-              <button type="submit" className={smallPrimaryButtonClass}>
-                <Plus size={14} aria-hidden /> Add Activity
+              <button type="submit" className={smallPrimaryButtonClass} disabled={activityBusy}>
+                <Plus size={14} aria-hidden /> {activityBusy ? 'Saving…' : 'Add Activity'}
               </button>
             </div>
           </form>
@@ -412,7 +441,8 @@ export function DetailsDialog({
                         <button
                           type="button"
                           className={confirmRemoveButtonClass}
-                          onClick={() => handleRemoveActivity(activity.id)}
+                          disabled={activityBusy}
+                          onClick={() => void handleRemoveActivity(activity.id)}
                         >
                           Remove
                         </button>
@@ -449,7 +479,7 @@ export function DetailsDialog({
         )}
 
         <div className="mt-s4 flex flex-wrap justify-end gap-s2">
-          <button type="button" className={secondaryButtonClass} onClick={handleArchiveToggle}>
+          <button type="button" className={secondaryButtonClass} onClick={() => void handleArchiveToggle()} disabled={archiveBusy || activityBusy}>
             {archived ? (
               <>
                 <RotateCcw size={16} aria-hidden /> Restore

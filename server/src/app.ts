@@ -2,11 +2,14 @@ import { MAX_BACKUP_BYTES } from '@launchboard/domain';
 import express from 'express';
 import type { Express } from 'express';
 import type { ReadinessProbe } from './db/readiness.js';
+import { createAuthRouter, type AuthEmailSender } from './routes/auth.js';
+import { createAccountActionsRouter } from './routes/accountActions.js';
 import { createErrorHandler } from './middleware/errorHandler.js';
 import { notFound } from './middleware/notFound.js';
 import { requestId } from './middleware/requestId.js';
 import { healthRouter } from './routes/health.js';
 import { createReadinessRouter } from './routes/readiness.js';
+import { createOpportunityRouter } from './routes/opportunities.js';
 
 /**
  * Transport limit for JSON requests. The version-1 backup itself is capped at
@@ -26,6 +29,13 @@ export interface AppOptions {
    * process health route still works and `/api/ready` returns 503.
    */
   database?: ReadinessProbe | null;
+  /**
+   * Database connection pool for authenticated API routes. `null` means no pool is
+   * available; authenticated API endpoints respond with 503.
+   */
+  dbPool?: Parameters<typeof createAuthRouter>[0];
+  /** Injectable transactional email sender for deterministic auth tests. */
+  emailSender?: AuthEmailSender;
   /**
    * Extension point for route modules. Called after common middleware and the
    * health route, but before the 404 and error handlers.
@@ -51,6 +61,13 @@ export function createApp(options: AppOptions = {}): Express {
 
   app.use('/api', healthRouter);
   app.use('/api', createReadinessRouter(options.database ?? null));
+  app.use('/api', createAuthRouter(options.dbPool ?? null, {
+    emailSender: options.emailSender,
+  }));
+  app.use('/api', createAccountActionsRouter(options.dbPool ?? null, {
+    emailSender: options.emailSender,
+  }));
+  app.use('/api/opportunities', createOpportunityRouter(options.dbPool ?? null));
   options.registerRoutes?.(app);
 
   app.use(notFound);

@@ -48,6 +48,7 @@ export function ContactSection({
   const [editor, setEditor] = useState<Editor | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const editRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -61,6 +62,7 @@ export function ContactSection({
   };
 
   const openAdd = (event: MouseEvent<HTMLButtonElement>) => {
+    if (busy) return;
     returnFocusRef.current = event.currentTarget;
     setPendingDeleteId(null);
     setSaveError(null);
@@ -68,6 +70,7 @@ export function ContactSection({
   };
 
   const openEdit = (event: MouseEvent<HTMLButtonElement>, contact: ContactEntry) => {
+    if (busy) return;
     returnFocusRef.current = event.currentTarget;
     setPendingDeleteId(null);
     setSaveError(null);
@@ -85,14 +88,9 @@ export function ContactSection({
     focusAfterUpdate(target);
   };
 
-  const saveEditor = (draft: ContactDraft) => {
-    if (!editor) return;
-    const saved =
-      editor.kind === 'add'
-        ? onAddContact(draft)
-        : onUpdateContact(editor.contact.id, draft);
+  const finishSave = (saved: boolean | void) => {
     if (saved === false) {
-      // Keep the editor mounted so the entered values survive for a retry.
+      // Keep the editor mounted so entered values survive for a retry.
       setSaveError(SAVE_FAILURE_MESSAGE);
       return;
     }
@@ -100,8 +98,27 @@ export function ContactSection({
     closeEditor();
   };
 
-  const confirmDelete = (contact: ContactEntry) => {
-    const saved = onRemoveContact(contact.id);
+  const saveEditor = (draft: ContactDraft) => {
+    if (!editor || busy) return;
+    try {
+      const result = editor.kind === 'add'
+        ? onAddContact(draft)
+        : onUpdateContact(editor.contact.id, draft);
+      if (result instanceof Promise) {
+        setBusy(true);
+        void result
+          .then(finishSave)
+          .catch(() => setSaveError(SAVE_FAILURE_MESSAGE))
+          .finally(() => setBusy(false));
+      } else {
+        finishSave(result);
+      }
+    } catch {
+      setSaveError(SAVE_FAILURE_MESSAGE);
+    }
+  };
+
+  const finishDelete = (saved: boolean | void) => {
     if (saved === false) {
       // Keep the confirmation visible so the user can retry or cancel.
       setSaveError(SAVE_FAILURE_MESSAGE);
@@ -110,6 +127,24 @@ export function ContactSection({
     setSaveError(null);
     setPendingDeleteId(null);
     focusAfterUpdate(addButtonRef.current);
+  };
+
+  const confirmDelete = (contact: ContactEntry) => {
+    if (busy) return;
+    try {
+      const result = onRemoveContact(contact.id);
+      if (result instanceof Promise) {
+        setBusy(true);
+        void result
+          .then(finishDelete)
+          .catch(() => setSaveError(SAVE_FAILURE_MESSAGE))
+          .finally(() => setBusy(false));
+      } else {
+        finishDelete(result);
+      }
+    } catch {
+      setSaveError(SAVE_FAILURE_MESSAGE);
+    }
   };
 
   return (
@@ -132,7 +167,7 @@ export function ContactSection({
             type="button"
             className={`${smallPrimaryButtonClass} disabled:cursor-not-allowed disabled:opacity-60`}
             onClick={openAdd}
-            disabled={atLimit}
+            disabled={atLimit || busy}
             aria-describedby={atLimit ? 'contact-limit' : undefined}
           >
             <Plus size={14} aria-hidden /> Add contact
@@ -163,6 +198,7 @@ export function ContactSection({
             initial={editor.kind === 'edit' ? editor.contact : undefined}
             onSave={saveEditor}
             onCancel={closeEditor}
+            busy={busy}
           />
         </div>
       )}
@@ -280,6 +316,7 @@ export function ContactSection({
                       autoFocus
                       className={deleteConfirmButtonClass}
                       aria-label={`Delete contact: ${contact.name}`}
+                      disabled={busy}
                       onClick={() => confirmDelete(contact)}
                     >
                       Delete contact
@@ -288,6 +325,7 @@ export function ContactSection({
                       type="button"
                       className={smallSecondaryButtonClass}
                       aria-label={`Keep contact: ${contact.name}`}
+                      disabled={busy}
                       onClick={() => {
                         setPendingDeleteId(null);
                         setSaveError(null);
@@ -307,6 +345,7 @@ export function ContactSection({
                       }}
                       className={smallSecondaryButtonClass}
                       aria-label={`Edit contact ${contact.name}`}
+                      disabled={busy}
                       onClick={(event) => openEdit(event, contact)}
                     >
                       <Pencil size={13} aria-hidden /> Edit
@@ -315,6 +354,7 @@ export function ContactSection({
                       type="button"
                       className={`${removeButtonClass} ml-auto`}
                       aria-label={`Delete contact ${contact.name}`}
+                      disabled={busy}
                       onClick={() => setPendingDeleteId(contact.id)}
                     >
                       <Trash2 size={14} aria-hidden />

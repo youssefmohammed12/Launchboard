@@ -18,8 +18,9 @@ import {
 interface Props {
   /** When provided, the form edits this material; otherwise it creates one. */
   initial?: MaterialEntry;
-  onSave: (draft: MaterialDraft) => void;
+  onSave: (draft: MaterialDraft) => void | Promise<void>;
   onCancel: () => void;
+  busy?: boolean;
 }
 
 const controlClass =
@@ -53,7 +54,7 @@ function toDraft(initial?: MaterialEntry): MaterialDraft {
   };
 }
 
-export function MaterialForm({ initial, onSave, onCancel }: Props) {
+export function MaterialForm({ initial, onSave, onCancel, busy = false }: Props) {
   const [data, setData] = useState<MaterialDraft>(() => toDraft(initial));
   const [errors, setErrors] = useState<MaterialFormErrors>({});
   const labelRef = useRef<HTMLInputElement>(null);
@@ -206,10 +207,10 @@ export function MaterialForm({ initial, onSave, onCancel }: Props) {
       </div>
 
       <div className="col-span-2 flex justify-end gap-s2 max-[640px]:col-span-1">
-        <button type="button" className={secondaryButtonClass} onClick={onCancel}>
+        <button type="button" className={secondaryButtonClass} onClick={onCancel} disabled={busy}>
           Cancel
         </button>
-        <button type="submit" className={primaryButtonClass}>
+        <button type="submit" className={primaryButtonClass} disabled={busy}>
           Save material
         </button>
       </div>

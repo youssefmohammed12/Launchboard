@@ -15,8 +15,9 @@ import {
 interface Props {
   /** When provided, the form edits this contact; otherwise it creates one. */
   initial?: ContactEntry;
-  onSave: (draft: ContactDraft) => void;
+  onSave: (draft: ContactDraft) => void | Promise<void>;
   onCancel: () => void;
+  busy?: boolean;
 }
 
 const controlClass =
@@ -43,7 +44,7 @@ function toDraft(initial?: ContactEntry): ContactDraft {
   return { name: '', role: '', email: '', phone: '', website: '', notes: '' };
 }
 
-export function ContactForm({ initial, onSave, onCancel }: Props) {
+export function ContactForm({ initial, onSave, onCancel, busy = false }: Props) {
   const [data, setData] = useState<ContactDraft>(() => toDraft(initial));
   const [errors, setErrors] = useState<ContactFormErrors>({});
   const nameRef = useRef<HTMLInputElement>(null);
@@ -197,10 +198,10 @@ export function ContactForm({ initial, onSave, onCancel }: Props) {
       </div>
 
       <div className="col-span-2 flex justify-end gap-s2 max-[640px]:col-span-1">
-        <button type="button" className={secondaryButtonClass} onClick={onCancel}>
+        <button type="button" className={secondaryButtonClass} onClick={onCancel} disabled={busy}>
           Cancel
         </button>
-        <button type="submit" className={primaryButtonClass}>
+        <button type="submit" className={primaryButtonClass} disabled={busy}>
           Save contact
         </button>
       </div>

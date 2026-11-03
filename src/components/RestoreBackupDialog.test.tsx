@@ -21,7 +21,7 @@ function backupFile(opportunities: unknown[]): File {
 }
 
 function selectFile(file: File): void {
-  fireEvent.change(screen.getByLabelText('JSON backup file'), {
+  fireEvent.change(screen.getByLabelText('CSV or JSON file'), {
     target: { files: [file] },
   });
 }
@@ -79,6 +79,36 @@ describe('RestoreBackupDialog', () => {
       'merge',
     );
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('previews CSV spreadsheets and imports their valid tabular records', async () => {
+    const onRestore = vi.fn(
+      (_backup: ParsedBackup, _mode: ImportMode): RestoreOutcome => ({ ok: true }),
+    );
+    render(
+      <RestoreBackupDialog currentItems={[]} onClose={vi.fn()} onRestore={onRestore} />,
+    );
+
+    const csv = [
+      'Title,Company,Type,Status,Priority,Tags',
+      'Frontend Engineer,Northwind Labs,Full-time,Applied,High,"React, Remote"',
+    ].join('\r\n');
+    await previewFor(new File([csv], 'opportunities.csv', { type: 'text/csv' }));
+
+    expect(definitionValue('Valid records')).toHaveTextContent('1');
+    fireEvent.click(screen.getByRole('button', { name: 'Add 1 record' }));
+
+    expect(onRestore).toHaveBeenCalledWith(
+      expect.objectContaining({
+        validRecords: 1,
+        records: [expect.objectContaining({
+          title: 'Frontend Engineer',
+          company: 'Northwind Labs',
+          tags: ['React', 'Remote'],
+        })],
+      }),
+      'merge',
+    );
   });
 
   it('shows repaired, invalid, and duplicate counts with skip details', async () => {

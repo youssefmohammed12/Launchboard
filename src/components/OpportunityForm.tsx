@@ -21,6 +21,8 @@ interface Props {
   opener?: HTMLElement | null;
   /** Id of the element to focus when the opener is gone. */
   fallbackFocusId?: string;
+  /** Optional notice shown when a stale server write refreshed the form base. */
+  notice?: string;
   /** Returns false when the change could not be persisted. */
   onSave: (data: OpportunityFormData) => MutationOutcome;
   onCancel: () => void;
@@ -53,11 +55,12 @@ function toFormData(o: Opportunity): OpportunityFormData {
   };
 }
 
-export function OpportunityForm({ initial, opener, fallbackFocusId, onSave, onCancel }: Props) {
+export function OpportunityForm({ initial, opener, fallbackFocusId, notice, onSave, onCancel }: Props) {
   const [data, setData] = useState<OpportunityFormData>(() => (initial ? toFormData(initial) : emptyForm));
   const [tagInput, setTagInput] = useState(() => (initial ? initial.tags.join(', ') : ''));
   const [errors, setErrors] = useState<FormErrors>({});
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   type Change = ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>;
   const text = (
@@ -72,8 +75,9 @@ export function OpportunityForm({ initial, opener, fallbackFocusId, onSave, onCa
       | 'notes',
   ) => (e: Change) => setData((d) => ({ ...d, [key]: e.target.value }));
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (saving) return;
     const found = validate(data);
     const parsedTags = parseTagInput(tagInput);
     if (parsedTags.error) found.tags = parsedTags.error;
@@ -81,16 +85,33 @@ export function OpportunityForm({ initial, opener, fallbackFocusId, onSave, onCa
     if (Object.keys(found).length > 0) return;
 
     setSaveError(null);
-    const saved = onSave({
-      ...data,
-      title: data.title.trim(),
-      company: data.company.trim(),
-      url: data.url.trim(),
-      deadline: data.deadline.trim(),
-      followUpDate: data.followUpDate.trim(),
-      tags: parsedTags.tags,
-    });
-    if (saved === false) setSaveError(SAVE_FAILURE_MESSAGE);
+    try {
+      const outcome = onSave({
+        ...data,
+        title: data.title.trim(),
+        company: data.company.trim(),
+        url: data.url.trim(),
+        deadline: data.deadline.trim(),
+        followUpDate: data.followUpDate.trim(),
+        tags: parsedTags.tags,
+      });
+
+      // Keep the local adapter's synchronous persistence/error feedback exactly
+      // synchronous. Only API-backed saves enter the pending UI state.
+      if (outcome instanceof Promise) {
+        setSaving(true);
+        try {
+          const saved = await outcome;
+          if (saved === false) setSaveError(SAVE_FAILURE_MESSAGE);
+        } finally {
+          setSaving(false);
+        }
+      } else if (outcome === false) {
+        setSaveError(SAVE_FAILURE_MESSAGE);
+      }
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : SAVE_FAILURE_MESSAGE);
+    }
   };
 
   const a11y = (k: keyof FormErrors) =>
@@ -111,7 +132,7 @@ export function OpportunityForm({ initial, opener, fallbackFocusId, onSave, onCa
       fallbackFocusId={fallbackFocusId}
     >
       <form
-        onSubmit={handleSubmit}
+        onSubmit={(event) => void handleSubmit(event)}
         onChange={() => {
           if (saveError) setSaveError(null);
         }}
@@ -233,20 +254,20 @@ export function OpportunityForm({ initial, opener, fallbackFocusId, onSave, onCa
           <label htmlFor="f-notes" className={labelClass}>Personal notes</label>
           <textarea id="f-notes" rows={3} className={controlClass} value={data.notes} onChange={text('notes')} />
         </div>
-        {saveError && (
+        {(notice || saveError) && (
           <p
             role="alert"
             className="col-span-2 m-0 rounded-control border border-danger bg-status-rejected px-s3 py-s2 text-[0.85rem] text-danger max-[640px]:col-span-1"
           >
-            {saveError}
+            {saveError ?? notice}
           </p>
         )}
         <div className="col-span-2 mt-s4 flex justify-end gap-s2 max-[640px]:col-span-1">
-          <button type="button" className={secondaryButtonClass} onClick={onCancel}>
+          <button type="button" className={secondaryButtonClass} onClick={onCancel} disabled={saving}>
             Cancel
           </button>
-          <button type="submit" className={primaryButtonClass}>
-            Save
+          <button type="submit" className={primaryButtonClass} disabled={saving}>
+            {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </form>

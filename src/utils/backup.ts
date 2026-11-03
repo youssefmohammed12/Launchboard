@@ -1,10 +1,12 @@
-import type { Opportunity } from '../types/opportunity';
-import { MAX_BACKUP_RECORDS } from '@launchboard/domain';
-import { BACKUP_FORMAT, BACKUP_SCHEMA_VERSION } from './exports';
 import {
-  normalizeOpportunityRecord,
-  type OpportunityNormalizationFailure,
-} from './storage';
+  MAX_BACKUP_RECORDS,
+  normalizeBackupOpportunityRecord,
+  type BackupRecordFailure,
+  type LaunchboardBackup,
+} from '@launchboard/domain';
+import type { Opportunity } from '../types/opportunity';
+import { BACKUP_FORMAT, BACKUP_SCHEMA_VERSION } from './exports';
+import { parseOpportunityCsv } from './csvImport';
 
 export { MAX_BACKUP_BYTES, MAX_BACKUP_RECORDS } from '@launchboard/domain';
 
@@ -12,7 +14,10 @@ export type BackupParseErrorCode =
   | 'invalid-json'
   | 'invalid-envelope'
   | 'unsupported-schema'
-  | 'too-many-records';
+  | 'too-many-records'
+  | 'invalid-csv'
+  | 'invalid-csv-header'
+  | 'invalid-csv-row';
 
 export interface BackupParseError {
   code: BackupParseErrorCode;
@@ -42,6 +47,17 @@ export type BackupParseResult =
   | { ok: true; backup: ParsedBackup }
   | { ok: false; error: BackupParseError };
 
+export interface ParsedImportFile {
+  backup: ParsedBackup;
+  /** Original JSON envelope, or a generated version-1 envelope for CSV. */
+  envelope: LaunchboardBackup;
+  fileType: 'json' | 'csv';
+}
+
+export type ImportFileParseResult =
+  | ({ ok: true } & ParsedImportFile)
+  | { ok: false; error: BackupParseError };
+
 export type ImportMode = 'merge' | 'replace';
 
 export interface ImportPlan {
@@ -66,9 +82,10 @@ export type RestoreOutcome =
   | { ok: true }
   | { ok: false; message: string };
 
-const REJECTION_MESSAGES: Record<OpportunityNormalizationFailure, string> = {
+const REJECTION_MESSAGES: Record<BackupRecordFailure, string> = {
   'not-an-object': 'Record is not an object.',
   'missing-id': 'Missing a usable ID.',
+  'invalid-id': 'The record ID exceeds the supported length.',
   'missing-title': 'Missing a title.',
   'missing-company': 'Missing a company or client.',
   'invalid-type': 'Invalid opportunity type.',
@@ -147,7 +164,7 @@ export function parseBackupJson(text: string): BackupParseResult {
   let duplicateRecords = 0;
 
   envelope.opportunities.forEach((raw, index) => {
-    const normalized = normalizeOpportunityRecord(raw);
+    const normalized = normalizeBackupOpportunityRecord(raw);
     if (!normalized.opportunity) {
       invalidRecords += 1;
       skipped.push({
@@ -187,6 +204,37 @@ export function parseBackupJson(text: string): BackupParseResult {
       duplicateRecords,
       skipped,
     },
+  };
+}
+
+/**
+ * Parses either the native full-fidelity JSON backup or a tabular CSV file.
+ * CSV is converted to the same version-1 envelope and passed through the
+ * canonical backup normalizer so local and server imports share validation.
+ */
+export function parseImportFile(text: string, fileName: string): ImportFileParseResult {
+  if (fileName.toLowerCase().endsWith('.csv')) {
+    const csv = parseOpportunityCsv(text);
+    if (!csv.ok) {
+      return { ok: false, error: csv.error };
+    }
+    const normalized = parseBackupJson(JSON.stringify(csv.backup));
+    if (!normalized.ok) return normalized;
+    return {
+      ok: true,
+      backup: normalized.backup,
+      envelope: csv.backup,
+      fileType: 'csv',
+    };
+  }
+
+  const parsed = parseBackupJson(text);
+  if (!parsed.ok) return parsed;
+  return {
+    ok: true,
+    backup: parsed.backup,
+    envelope: JSON.parse(text) as LaunchboardBackup,
+    fileType: 'json',
   };
 }
 

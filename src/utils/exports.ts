@@ -111,13 +111,24 @@ export function downloadCsv(items: Opportunity[]): void {
   );
 }
 
-/** Downloads a versioned JSON backup of the complete current opportunity data. */
-export function downloadJsonBackup(items: Opportunity[]): void {
+/** Downloads an exact versioned backup envelope returned by the authenticated API. */
+export function downloadJsonBackupEnvelope(backup: LaunchboardBackup): void {
   triggerDownload(
     `launchboard-backup-${toISODate(new Date())}.json`,
-    createJsonBackup(items),
+    JSON.stringify(backup, null, 2),
     'application/json;charset=utf-8',
   );
+}
+
+/** Downloads a versioned JSON backup of the complete current opportunity data. */
+export function downloadJsonBackup(items: Opportunity[]): void {
+  const backup: LaunchboardBackup = {
+    format: BACKUP_FORMAT,
+    schemaVersion: BACKUP_SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    opportunities: items,
+  };
+  downloadJsonBackupEnvelope(backup);
 }
 
 /**

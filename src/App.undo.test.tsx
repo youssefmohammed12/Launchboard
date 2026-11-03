@@ -26,7 +26,7 @@ function backupFile(opportunities: unknown[]): File {
 }
 
 function selectBackup(file: File): void {
-  fireEvent.change(screen.getByLabelText('JSON backup file'), {
+  fireEvent.change(screen.getByLabelText('CSV or JSON file'), {
     target: { files: [file] },
   });
 }
@@ -415,7 +415,7 @@ describe('App Undo and JSON import', () => {
     expect(undoButton()).not.toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Reports' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Restore JSON Backup' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import CSV / JSON' }));
     selectBackup(backupFile([makeOpportunity({ id: 'incoming', title: 'Incoming Role' })]));
     expect(await screen.findByRole('heading', { name: 'Backup preview' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add 1 record' }));
@@ -436,7 +436,7 @@ describe('App Undo and JSON import', () => {
     archiveFromDetails('Frontend Intern');
 
     fireEvent.click(screen.getByRole('button', { name: 'Reports' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Restore JSON Backup' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import CSV / JSON' }));
 
     const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('Quota exceeded');

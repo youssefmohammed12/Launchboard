@@ -11,6 +11,8 @@ import {
   parseMigrationDatabaseEnv,
 } from '../config/env.js';
 
+const validCaCertificate = "-----BEGIN CERTIFICATE-----\nY2VydGlmaWNhdGUtcGFyc2VyLXRlc3Q=\n-----END CERTIFICATE-----";
+
 const touchedEnvNames: string[] = [];
 
 function trackEnv(name: string): void {
@@ -190,6 +192,87 @@ describe('parseDatabaseEnv', () => {
     ).toBe('  secret with spaces  ');
   });
 
+  it('accepts a PEM CA certificate for a production database connection', () => {
+    expect(
+      parseDatabaseEnv({
+        NODE_ENV: 'production',
+        DB_NAME: 'launchboard',
+        DB_USER: 'launchboard_app',
+        DB_PASSWORD: 'secret',
+        DB_SSL_CA: validCaCertificate,
+      }),
+    ).toMatchObject({ sslCa: validCaCertificate });
+  });
+
+  it('enables verified TLS by default for production database connections', () => {
+    expect(
+      parseDatabaseEnv({
+        NODE_ENV: 'production',
+        DB_NAME: 'launchboard',
+        DB_USER: 'launchboard_app',
+        DB_PASSWORD: 'secret',
+      }),
+    ).toMatchObject({ ssl: true });
+  });
+
+  it('allows an explicit TLS setting for TiDB Serverless', () => {
+    expect(
+      parseDatabaseEnv({
+        NODE_ENV: 'production',
+        DB_NAME: 'launchboard',
+        DB_USER: 'launchboard_app',
+        DB_PASSWORD: 'secret',
+        DB_SSL: 'true',
+      }),
+    ).toMatchObject({ ssl: true });
+  });
+
+  it('rejects invalid TLS setting values without exposing them', () => {
+    expect(() =>
+      parseDatabaseEnv({
+        DB_NAME: 'launchboard',
+        DB_USER: 'launchboard_app',
+        DB_PASSWORD: 'secret',
+        DB_SSL: 'sometimes-secret',
+      }),
+    ).toThrow(EnvValidationError);
+  });
+
+  it('does not allow TLS to be disabled in production', () => {
+    expect(() =>
+      parseDatabaseEnv({
+        NODE_ENV: 'production',
+        DB_NAME: 'launchboard',
+        DB_USER: 'launchboard_app',
+        DB_PASSWORD: 'secret',
+        DB_SSL: 'false',
+      }),
+    ).toThrow(EnvValidationError);
+  });
+
+  it('does not allow a custom CA to be configured while TLS is disabled', () => {
+    expect(() =>
+      parseDatabaseEnv({
+        DB_NAME: 'launchboard',
+        DB_USER: 'launchboard_app',
+        DB_PASSWORD: 'secret',
+        DB_SSL: 'false',
+        DB_SSL_CA: validCaCertificate,
+      }),
+    ).toThrow(EnvValidationError);
+  });
+
+  it('rejects malformed database CA certificate contents', () => {
+    expect(() =>
+      parseDatabaseEnv({
+        DB_NAME: 'launchboard',
+        DB_USER: 'launchboard_app',
+        DB_PASSWORD: 'secret',
+        DB_SSL_CA: 'not-a-pem-certificate',
+      }),
+    ).toThrow(EnvValidationError);
+  });
+
   it('refuses any database name other than launchboard', () => {
     let caught: EnvValidationError | null = null;
     try {
@@ -317,6 +400,18 @@ describe('parseMigrationDatabaseEnv', () => {
       user: 'launchboard_migrator',
       password: 'migration-secret',
     });
+  });
+
+  it('shares the production database CA with the migration connection', () => {
+    expect(
+      parseMigrationDatabaseEnv({
+        NODE_ENV: 'production',
+        DB_NAME: 'launchboard',
+        DB_MIGRATION_USER: 'launchboard_migrator',
+        DB_MIGRATION_PASSWORD: 'migration-secret',
+        DB_SSL_CA: validCaCertificate,
+      }),
+    ).toMatchObject({ sslCa: validCaCertificate });
   });
 
   it('keeps runtime and migration credentials separate', () => {

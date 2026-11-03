@@ -4,6 +4,8 @@ interface Props {
   title: string;
   message: string;
   confirmLabel: string;
+  /** Disables both actions while the confirmed operation is in flight. */
+  busy?: boolean;
   /** The control that opened this dialog, recorded explicitly for focus restore. */
   opener?: HTMLElement | null;
   /** Id of the element to focus when the opener is gone. */
@@ -21,6 +23,7 @@ export function ConfirmDialog({
   title,
   message,
   confirmLabel,
+  busy = false,
   opener,
   fallbackFocusId,
   onConfirm,
@@ -31,10 +34,16 @@ export function ConfirmDialog({
       <div className="px-s5 pt-s4 pb-s5">
         <p>{message}</p>
         <div className="mt-s4 flex justify-end gap-s2">
-          <button type="button" className={secondaryButtonClass} onClick={onCancel}>
+          <button type="button" className={secondaryButtonClass} onClick={onCancel} disabled={busy}>
             Cancel
           </button>
-          <button type="button" className={dangerButtonClass} onClick={onConfirm}>
+          <button
+            type="button"
+            className={dangerButtonClass}
+            onClick={onConfirm}
+            disabled={busy}
+            aria-disabled={busy}
+          >
             {confirmLabel}
           </button>
         </div>

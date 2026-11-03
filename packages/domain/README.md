@@ -1,7 +1,7 @@
 # `@launchboard/domain`
 
 Environment-independent domain contracts and pure rules shared by the Launchboard
-frontend and the future Node.js/Express backend.
+frontend and the Node.js/Express backend.
 
 This package is **contracts only**. It contains no React, no DOM access, no
 `localStorage`, no recovery policy, no downloads and no API client.
@@ -16,6 +16,7 @@ This package is **contracts only**. It contains no React, no DOM access, no
 | `tags.ts` | `normalizeTagList` | Trim, case-insensitive dedupe and "keep the first spelling" must behave identically on both sides. |
 | `validation.ts` | `isValidUrl`, `isValidInterviewTime`, `isValidContactEmail` | Small, pure field rules that both environments apply. |
 | `backup.ts` | `BACKUP_FORMAT`, `BACKUP_SCHEMA_VERSION`, `LaunchboardBackup` | The version-1 JSON envelope is a shared wire contract. |
+| `backupNormalization.ts` | `normalizeBackupOpportunityRecord` and its typed result | Shared, environment-independent version-1 backup-record repair used by both server import and the browser backup-file import parser. |
 
 ## What does not belong here
 
@@ -25,22 +26,26 @@ This package is **contracts only**. It contains no React, no DOM access, no
 - CSV creation, file downloads, `Blob`, `document`, `window`, React or hooks.
 - Server-only concerns: sessions, ownership, SQL, versions, audit timestamps.
 
-## Client recovery vs server request validation
+## Import repair vs normal request validation
 
-These are intentionally different responsibilities and are **not** unified here.
+These are deliberately separate policies.
 
-- **Client recovery** (`src/utils/storage.ts`) is permissive. A malformed stored
-  record is repaired: an invalid priority becomes `Medium`, an invalid date
-  becomes `''`, a dangling interview contact reference is cleared, and invalid
-  nested entries are dropped without discarding the parent. The goal is to keep
-  as much valid user data as possible.
-- **Server request validation** (future API) is strict. An invalid field in a
-  `POST`/`PUT` body is rejected with `422 VALIDATION_ERROR`; it is not silently
-  repaired. The API is authoritative for what it stores.
+- **Browser storage recovery** (`src/utils/storage.ts`) remains browser-specific.
+  It preserves localStorage recovery state, write blocking and UI diagnostics.
+  Do not move those responsibilities into this package.
+- **Version-1 backup import repair** (`backupNormalization.ts`) is pure and
+  environment-independent. Both the server import path and the browser
+  version-1 backup-file parser use it to repair optional fields, drop malformed
+  children, keep first valid child IDs and clear dangling interview-contact
+  references while retaining valid parent records. Browser localStorage
+  recovery remains a separate frontend-only policy.
+- **Normal API writes** remain strict. An invalid field in a `POST`/`PUT` body
+  is rejected with `422 VALIDATION_ERROR`; it is never silently repaired.
+  The server remains authoritative for what it stores.
 
-Only rules with identical semantics in both environments live in this package.
-The permissive normalizers stay in the frontend, and the server will implement
-strict validation separately using these shared constants and predicates.
+The shared import helper contains no persistence, browser recovery, download or
+API behavior. It can therefore be used by both import adapters without pulling
+frontend modules into the backend.
 
 ## Consumption by the frontend
 
@@ -92,9 +97,9 @@ importing the package source directly.
   package test asserts that no browser, React or persistence module appears in
   `src/`.
 
-## Future backend consumption
+## Backend consumption
 
-The backend will add the same workspace dependency and import only the public
+The backend uses the same workspace dependency and imports only the public
 entry point:
 
 ```ts

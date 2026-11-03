@@ -1,6 +1,5 @@
 import {
   BACKUP_FORMAT,
-  BACKUP_SCHEMA_VERSION,
   MAX_BACKUP_RECORDS,
 } from '@launchboard/domain';
 import { z } from 'zod';
@@ -16,8 +15,12 @@ import { z } from 'zod';
  */
 export const backupEnvelopeSchema = z.object({
   format: z.literal(BACKUP_FORMAT),
-  schemaVersion: z.literal(BACKUP_SCHEMA_VERSION),
-  exportedAt: z.string().optional(),
+  // Keep the numeric version so the route can report unsupported-schema
+  // explicitly instead of treating it as an ordinary shape error.
+  schemaVersion: z.number().int('must be an integer'),
+  // exportedAt is advisory in v1. The browser importer ignores malformed
+  // metadata, so the server must not reject an otherwise usable backup.
+  exportedAt: z.unknown().optional(),
   opportunities: z
     .array(z.unknown())
     .max(

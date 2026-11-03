@@ -6,6 +6,13 @@ vi.mock('../db/pool.js', () => ({
   createDatabasePool: vi.fn(),
 }));
 
+// The developer's real `.env` must not leak into these tests. The environment
+// parsers stay real; only file loading is disabled.
+vi.mock('../config/env.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../config/env.js')>();
+  return { ...actual, loadEnvFile: vi.fn(() => false) };
+});
+
 const mockCreatePool = createDatabasePool as unknown as ReturnType<typeof vi.fn>;
 
 const DB_ENV_NAMES = [

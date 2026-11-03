@@ -42,6 +42,16 @@ export function buildPoolOptions(config: DatabaseConfig) {
     user: config.user,
     password: config.password,
     database: config.database,
+    ...(config.ssl === true || config.sslCa !== undefined
+      ? {
+          ssl: {
+            minVersion: 'TLSv1.2',
+            ...(config.sslCa === undefined ? {} : { ca: config.sslCa }),
+            rejectUnauthorized: true,
+            verifyIdentity: true,
+          },
+        }
+      : {}),
     charset: 'utf8mb4',
     // `dateStrings` keeps DATE/TIME values as strings so calendar dates never
     // pass through a JavaScript Date in the server's local timezone.
@@ -52,7 +62,14 @@ export function buildPoolOptions(config: DatabaseConfig) {
     multipleStatements: false,
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
-    ...DB_POOL_SETTINGS,
+    ...(config.serverless
+      ? {
+          connectionLimit: 2,
+          maxIdle: 1,
+          idleTimeout: 60_000,
+          queueLimit: 20,
+        }
+      : DB_POOL_SETTINGS),
   };
 }
 
@@ -112,15 +129,23 @@ export async function checkDatabaseReadiness(
 
 export interface DatabaseService extends ReadinessProbe {
   close(): Promise<void>;
+  getPool(): Pool;
 }
 
 /** Creates one pool per process and reuses it for readiness checks. */
 export function createDatabaseService(config: DatabaseConfig): DatabaseService {
   const pool = createDatabasePool(config);
+
   return {
     check: () => checkDatabaseReadiness(pool),
+
     close: async () => {
       await pool.end();
     },
+
+    getPool: () => pool,
   };
 }
+
+
+

@@ -1,9 +1,48 @@
-
+# Dependencies
+node_modules/
 **/node_modules/
+
+# Build output and test artifacts
+dist/
 **/dist/
+dist-base/
+dist-tw/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# Local environment and secrets
+.env
+.env.*
 **/.env
 **/.env.*
+!.env.example
 !**/.env.example
-**/coverage/
-**/playwright-report/
-**/test-results/
+
+# Local deployment output (generated from the source and helper scripts)
+deployment/api/
+deployment/assets/
+deployment/api-bundle.b64
+deployment/upload-manifest.json
+deployment/index.html
+deployment/package.json
+
+# Local AI instructions, agent skills, and conversation handoffs
+.cline/
+.clinerules/
+docs/next-chat-handoff.md
+docs/implementation-roadmap.md
+docs/superpowers/
+
+# Local diagnostics and recovery-only copies
+cmp.cjs
+src/styles.baseline.css
+src/styles.tw.css
+
+# Tooling and operating-system files
+.vercel/
+.vite/
+.DS_Store
+Thumbs.db
+*.log

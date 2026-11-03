@@ -32,6 +32,11 @@ interface Props {
   onOpen: (item: Opportunity, trigger?: HTMLElement | null) => void;
   /** Opens the JSON restore dialog; the button is passed for focus restoration. */
   onRestoreBackup: (trigger?: HTMLElement | null) => void;
+  /** Uses the authenticated export endpoint in API mode; local mode keeps its browser export. */
+  onDownloadBackup?: () => void;
+  backupExportBusy?: boolean;
+  backupStorageDescription?: string;
+  restoreBackupLabel?: string;
 }
 
 const IN_PROGRESS_STATUSES: readonly OpportunityStatus[] = ['Saved', 'Applied', 'Interview'];
@@ -129,7 +134,15 @@ function EmptySection({ children }: { children: ReactNode }) {
   );
 }
 
-export function Reports({ items, onOpen, onRestoreBackup }: Props) {
+export function Reports({
+  items,
+  onOpen,
+  onRestoreBackup,
+  onDownloadBackup,
+  backupExportBusy = false,
+  backupStorageDescription = 'Files are generated and read locally in your browser and are never uploaded.',
+  restoreBackupLabel = 'Import CSV / JSON',
+}: Props) {
   // Reports summarise the active working portfolio. Exports still receive the
   // complete collection so archived records are never silently omitted.
   const active = activeOpportunities(items);
@@ -191,17 +204,17 @@ export function Reports({ items, onOpen, onRestoreBackup }: Props) {
             excluded from these totals.
           </p>
           <p className="m-0 text-[0.8rem] text-muted">
-            CSV is intended for spreadsheets and tabular analysis. JSON backup preserves the
-            complete opportunity records, nested activity history, interviews, contacts,
-            application materials and valid contact links, and can be restored here. Both
-            exports include archived records; CSV keeps its existing columns, so use JSON to
-            inspect archive state.
+            CSV is intended for spreadsheets and tabular analysis and can be imported here.
+            JSON backup preserves the complete opportunity records, nested activity history,
+            interviews, contacts, application materials and valid contact links. Both exports
+            include archived records, but CSV does not include archive state or every nested
+            collection; use JSON for a full-fidelity restore.
           </p>
           <p className="m-0 mt-s1 text-[0.78rem] text-muted">
-            Files are generated and read locally in your browser and are never uploaded.
+            {backupStorageDescription}
           </p>
         </div>
-        <div className="flex flex-wrap gap-s2" role="group" aria-label="Export and restore data">
+        <div className="flex flex-wrap gap-s2" role="group" aria-label="Import and export data">
           <button
             type="button"
             className={exportButtonClass}
@@ -213,10 +226,11 @@ export function Reports({ items, onOpen, onRestoreBackup }: Props) {
           <button
             type="button"
             className={exportButtonClass}
-            onClick={() => downloadJsonBackup(items)}
+            disabled={backupExportBusy}
+            onClick={() => onDownloadBackup ? onDownloadBackup() : downloadJsonBackup(items)}
           >
             <FileJson size={16} aria-hidden className="text-accent" />
-            Download JSON Backup
+            {backupExportBusy ? 'Preparing backup…' : 'Download JSON Backup'}
           </button>
           <button
             type="button"
@@ -224,7 +238,7 @@ export function Reports({ items, onOpen, onRestoreBackup }: Props) {
             onClick={(event) => onRestoreBackup(event.currentTarget)}
           >
             <Upload size={16} aria-hidden className="text-accent" />
-            Restore JSON Backup
+            {restoreBackupLabel}
           </button>
         </div>
       </header>

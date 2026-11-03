@@ -48,8 +48,9 @@ export function normalizeError(error: unknown): ApiError {
 
 export interface ErrorHandlerOptions {
   /**
-   * Log unexpected 5xx causes server-side with the request ID. Disabled in
-   * tests so intentional failures do not pollute the test output.
+   * Logs sanitized server failures and security/conflict events with request
+   * IDs. Raw errors, request bodies and credentials are never written.
+   * Disabled in tests unless a test explicitly enables it.
    */
   logErrors?: boolean;
 }
@@ -64,10 +65,31 @@ export function createErrorHandler(options: ErrorHandlerOptions = {}): ErrorRequ
     }
 
     const requestId = req.requestId ?? randomUUID();
-    const apiError = normalizeError(error);
+    const parseError =
+      typeof error === 'object' && error !== null &&
+      (error as { type?: unknown }).type === 'entity.parse.failed';
+    const isBackupImport =
+      req.method === 'POST' && req.originalUrl.split('?', 1)[0] === '/api/opportunities/import';
+    const apiError = isBackupImport && parseError
+      ? new ApiError(
+          422,
+          'INVALID_BACKUP',
+          'The backup file is not valid JSON.',
+          { reason: 'invalid-json' },
+        )
+      : normalizeError(error);
 
-    if (apiError.status >= 500 && logErrors) {
-      console.error(`[launchboard-api] ${requestId} ${apiError.code}:`, error);
+    if (logErrors && apiError.status >= 500) {
+      // Keep diagnostics correlatable without serializing driver errors,
+      // SQL parameters, request bodies, cookies, tokens or credentials.
+      console.error(`[launchboard-api] ${requestId} ${apiError.code}`);
+    } else if (
+      logErrors &&
+      [401, 403, 409, 412, 428, 429].includes(apiError.status)
+    ) {
+      // Authentication failures, conflicts and rate-limit events are useful
+      // security signals; log only the safe code and request ID.
+      console.warn(`[launchboard-api] ${requestId} ${apiError.code}`);
     }
 
     res.status(apiError.status).json(buildErrorEnvelope(apiError, requestId));

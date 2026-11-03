@@ -69,6 +69,7 @@ export function InterviewSection({
   const [editor, setEditor] = useState<Editor | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const editRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -83,6 +84,7 @@ export function InterviewSection({
   };
 
   const openAdd = (event: MouseEvent<HTMLButtonElement>) => {
+    if (busy) return;
     returnFocusRef.current = event.currentTarget;
     setPendingDeleteId(null);
     setSaveError(null);
@@ -90,6 +92,7 @@ export function InterviewSection({
   };
 
   const openEdit = (event: MouseEvent<HTMLButtonElement>, interview: InterviewEntry) => {
+    if (busy) return;
     returnFocusRef.current = event.currentTarget;
     setPendingDeleteId(null);
     setSaveError(null);
@@ -97,6 +100,7 @@ export function InterviewSection({
   };
 
   const openReschedule = (event: MouseEvent<HTMLButtonElement>, interview: InterviewEntry) => {
+    if (busy) return;
     returnFocusRef.current = event.currentTarget;
     setPendingDeleteId(null);
     setSaveError(null);
@@ -118,40 +122,71 @@ export function InterviewSection({
   };
 
   const saveEditor = (draft: InterviewDraft) => {
-    if (!editor) return;
-    const saved =
-      editor.kind === 'add'
+    if (!editor || busy) return;
+    const finish = (saved: boolean | void) => {
+      if (saved === false) {
+        setSaveError(SAVE_FAILURE_MESSAGE);
+        return;
+      }
+      setSaveError(null);
+      closeEditor();
+    };
+    try {
+      const result = editor.kind === 'add'
         ? onAddInterview(draft)
         : onUpdateInterview(editor.interview.id, draft);
-    if (saved === false) {
-      // Keep the editor mounted so the entered values survive for a retry.
+      if (result instanceof Promise) {
+        setBusy(true);
+        void result.then(finish).catch(() => setSaveError(SAVE_FAILURE_MESSAGE)).finally(() => setBusy(false));
+      } else {
+        finish(result);
+      }
+    } catch {
       setSaveError(SAVE_FAILURE_MESSAGE);
-      return;
     }
-    setSaveError(null);
-    closeEditor();
   };
 
   const changeStatus = (interview: InterviewEntry, status: InterviewStatus) => {
-    const saved = onInterviewStatusChange(interview.id, status);
-    if (saved === false) {
+    if (busy) return;
+    const finish = (saved: boolean | void) => {
+      setSaveError(saved === false ? SAVE_FAILURE_MESSAGE : null);
+      if (saved !== false) focusAfterUpdate(editRefs.current.get(interview.id) ?? null);
+    };
+    try {
+      const result = onInterviewStatusChange(interview.id, status);
+      if (result instanceof Promise) {
+        setBusy(true);
+        void result.then(finish).catch(() => setSaveError(SAVE_FAILURE_MESSAGE)).finally(() => setBusy(false));
+      } else {
+        finish(result);
+      }
+    } catch {
       setSaveError(SAVE_FAILURE_MESSAGE);
-      return;
     }
-    setSaveError(null);
-    focusAfterUpdate(editRefs.current.get(interview.id) ?? null);
   };
 
   const confirmDelete = (interview: InterviewEntry) => {
-    const saved = onRemoveInterview(interview.id);
-    if (saved === false) {
-      // Keep the confirmation visible so the user can retry or cancel.
+    if (busy) return;
+    const finish = (saved: boolean | void) => {
+      if (saved === false) {
+        setSaveError(SAVE_FAILURE_MESSAGE);
+        return;
+      }
+      setSaveError(null);
+      setPendingDeleteId(null);
+      focusAfterUpdate(addButtonRef.current);
+    };
+    try {
+      const result = onRemoveInterview(interview.id);
+      if (result instanceof Promise) {
+        setBusy(true);
+        void result.then(finish).catch(() => setSaveError(SAVE_FAILURE_MESSAGE)).finally(() => setBusy(false));
+      } else {
+        finish(result);
+      }
+    } catch {
       setSaveError(SAVE_FAILURE_MESSAGE);
-      return;
     }
-    setSaveError(null);
-    setPendingDeleteId(null);
-    focusAfterUpdate(addButtonRef.current);
   };
 
   return (
@@ -176,7 +211,7 @@ export function InterviewSection({
             type="button"
             className={`${smallPrimaryButtonClass} disabled:cursor-not-allowed disabled:opacity-60`}
             onClick={openAdd}
-            disabled={atLimit}
+            disabled={atLimit || busy}
             aria-describedby={atLimit ? 'interview-limit' : undefined}
           >
             <Plus size={14} aria-hidden /> Add interview
@@ -208,6 +243,7 @@ export function InterviewSection({
             initial={editor.kind === 'edit' ? editor.interview : undefined}
             onSave={saveEditor}
             onCancel={closeEditor}
+            busy={busy}
           />
         </div>
       )}
@@ -314,6 +350,7 @@ export function InterviewSection({
                       autoFocus
                       className={deleteConfirmButtonClass}
                       aria-label={`Delete interview: ${interview.round}`}
+                      disabled={busy}
                       onClick={() => confirmDelete(interview)}
                     >
                       Delete interview
@@ -322,6 +359,7 @@ export function InterviewSection({
                       type="button"
                       className={smallSecondaryButtonClass}
                       aria-label={`Keep interview: ${interview.round}`}
+                      disabled={busy}
                       onClick={() => {
                         setPendingDeleteId(null);
                         setSaveError(null);
@@ -341,6 +379,7 @@ export function InterviewSection({
                       }}
                       className={smallSecondaryButtonClass}
                       aria-label={`Edit ${interview.round}`}
+                      disabled={busy}
                       onClick={(event) => openEdit(event, interview)}
                     >
                       <Pencil size={13} aria-hidden /> Edit
@@ -352,6 +391,7 @@ export function InterviewSection({
                           type="button"
                           className={smallPrimaryButtonClass}
                           aria-label={`Mark completed: ${interview.round}`}
+                          disabled={busy}
                           onClick={() => changeStatus(interview, 'Completed')}
                         >
                           <Check size={13} aria-hidden /> Mark completed
@@ -360,6 +400,7 @@ export function InterviewSection({
                           type="button"
                           className={smallSecondaryButtonClass}
                           aria-label={`Cancel interview: ${interview.round}`}
+                          disabled={busy}
                           onClick={() => changeStatus(interview, 'Cancelled')}
                         >
                           <X size={13} aria-hidden /> Cancel interview
@@ -372,6 +413,7 @@ export function InterviewSection({
                         type="button"
                         className={smallSecondaryButtonClass}
                         aria-label={`Reschedule: ${interview.round}`}
+                        disabled={busy}
                         onClick={(event) => openReschedule(event, interview)}
                       >
                         <RotateCcw size={13} aria-hidden /> Reschedule
@@ -383,6 +425,7 @@ export function InterviewSection({
                         type="button"
                         className={smallSecondaryButtonClass}
                         aria-label={`Record outcome for ${interview.round}`}
+                        disabled={busy}
                         onClick={(event) => openEdit(event, interview)}
                       >
                         Record outcome
@@ -393,6 +436,7 @@ export function InterviewSection({
                       type="button"
                       className={`${removeButtonClass} ml-auto`}
                       aria-label={`Delete ${interview.round}`}
+                      disabled={busy}
                       onClick={() => setPendingDeleteId(interview.id)}
                     >
                       <Trash2 size={14} aria-hidden />

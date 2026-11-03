@@ -43,6 +43,28 @@ describe('OpportunityForm', () => {
     );
   });
 
+  it('keeps the form open and shows an asynchronous server save error', async () => {
+    const onSave = vi.fn(async () => {
+      throw new Error('This opportunity changed on the server. Reload and try again.');
+    });
+    render(<OpportunityForm onSave={onSave} onCancel={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText(/Title/), {
+      target: { value: 'Frontend Intern' },
+    });
+    fireEvent.change(screen.getByLabelText(/Company or client/), {
+      target: { value: 'Northwind Labs' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This opportunity changed on the server. Reload and try again.',
+    );
+    expect(screen.getByRole('heading', { name: 'Add opportunity' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Title/)).toHaveValue('Frontend Intern');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+  });
+
   it('rejects an invalid application URL', () => {
     const { onSave } = renderForm();
 

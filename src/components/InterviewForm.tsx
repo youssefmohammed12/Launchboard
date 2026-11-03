@@ -24,8 +24,9 @@ interface Props {
   contacts: ContactEntry[];
   /** When provided, the form edits this interview; otherwise it creates one. */
   initial?: InterviewEntry;
-  onSave: (draft: InterviewDraft) => void;
+  onSave: (draft: InterviewDraft) => void | Promise<void>;
   onCancel: () => void;
+  busy?: boolean;
 }
 
 const controlClass =
@@ -69,7 +70,7 @@ function toDraft(initial?: InterviewEntry): InterviewDraft {
   };
 }
 
-export function InterviewForm({ contacts, initial, onSave, onCancel }: Props) {
+export function InterviewForm({ contacts, initial, onSave, onCancel, busy = false }: Props) {
   const [data, setData] = useState<InterviewDraft>(() => toDraft(initial));
   const [errors, setErrors] = useState<InterviewFormErrors>({});
   const roundRef = useRef<HTMLInputElement>(null);
@@ -322,10 +323,10 @@ export function InterviewForm({ contacts, initial, onSave, onCancel }: Props) {
       </div>
 
       <div className="col-span-2 flex justify-end gap-s2 max-[640px]:col-span-1">
-        <button type="button" className={secondaryButtonClass} onClick={onCancel}>
+        <button type="button" className={secondaryButtonClass} onClick={onCancel} disabled={busy}>
           Cancel
         </button>
-        <button type="submit" className={primaryButtonClass}>
+        <button type="submit" className={primaryButtonClass} disabled={busy}>
           Save interview
         </button>
       </div>

@@ -13,6 +13,7 @@ interface Props {
   items: Opportunity[];
   /** The control that opened the search, recorded for focus restoration. */
   opener?: HTMLElement | null;
+  fallbackFocusId?: string;
   onClose: () => void;
   onSelect: (result: GlobalSearchResult) => void;
 }
@@ -40,7 +41,7 @@ function optionId(index: number): string {
   return `global-search-option-${index}`;
 }
 
-export function GlobalSearchDialog({ items, opener, onClose, onSelect }: Props) {
+export function GlobalSearchDialog({ items, opener, fallbackFocusId = 'main-content', onClose, onSelect }: Props) {
   const [query, setQuery] = useState('');
   const [includeArchived, setIncludeArchived] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -97,7 +98,7 @@ export function GlobalSearchDialog({ items, opener, onClose, onSelect }: Props) 
       title="Search Launchboard"
       onClose={onClose}
       opener={opener}
-      fallbackFocusId="main-content"
+      fallbackFocusId={fallbackFocusId}
       initialFocusId="global-search-input"
     >
       <div className="px-s5 pt-s4 pb-s5">

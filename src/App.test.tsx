@@ -23,7 +23,7 @@ function backupFile(opportunities: unknown[]): File {
 }
 
 function selectBackup(file: File): void {
-  fireEvent.change(screen.getByLabelText('JSON backup file'), {
+  fireEvent.change(screen.getByLabelText('CSV or JSON file'), {
     target: { files: [file] },
   });
 }
@@ -48,7 +48,7 @@ describe('App JSON restoration', () => {  it('does not show or store an import t
       throw new Error('Quota exceeded');
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Restore JSON Backup' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import CSV / JSON' }));
     selectBackup(backupFile([incoming]));
     expect(await screen.findByRole('heading', { name: 'Backup preview' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add 1 record' }));
@@ -62,7 +62,7 @@ describe('App JSON restoration', () => {  it('does not show or store an import t
 
     setItem.mockRestore();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Restore JSON Backup' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import CSV / JSON' }));
     selectBackup(backupFile([incoming]));
     expect(await screen.findByRole('heading', { name: 'Backup preview' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add 1 record' }));
@@ -509,7 +509,7 @@ describe('App archive and restore', () => {
 
     expect(within(dialog).getByText('Archived')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Restore' })).toBeInTheDocument();
-    expect(within(dialog).getByRole('status')).toHaveTextContent(
+    expect(await within(dialog).findByRole('status')).toHaveTextContent(
       'Archived “Frontend Intern”. It is available in the Archived view.',
     );
 
@@ -618,7 +618,7 @@ describe('App archive and restore', () => {
     expect(afterEdit[0].activities.map((activity) => activity.type)).toEqual(['Status changed']);
   });
 
-  it('does not change archive state when the write fails, then retries successfully', () => {
+  it('does not change archive state when the write fails, then retries successfully', async () => {
     const item = makeOpportunity({ id: 'op-1', title: 'Frontend Intern', status: 'Saved' });
     localStorage.setItem(KEY, JSON.stringify([item]));
 
@@ -633,7 +633,7 @@ describe('App archive and restore', () => {
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Archive' }));
 
-    expect(within(dialog).getByRole('alert')).toHaveTextContent('could not be saved');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('could not be saved');
     expect(within(dialog).getByRole('button', { name: 'Archive' })).toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: 'Restore' })).not.toBeInTheDocument();
     expect(JSON.parse(localStorage.getItem(KEY) ?? 'null')[0].archivedAt).toBeUndefined();
@@ -643,7 +643,7 @@ describe('App archive and restore', () => {
     setItem.mockRestore();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Archive' }));
 
-    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+    await waitFor(() => expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument());
     expect(within(dialog).getByRole('button', { name: 'Restore' })).toBeInTheDocument();
     const stored = JSON.parse(localStorage.getItem(KEY) ?? 'null') as {
       status: string;

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import ApiModeApp from './ApiModeApp';
 import {
   SYSTEM_ACTIVITY_TYPE,
   type ActivityDraft,
@@ -122,7 +123,7 @@ interface ArchiveNotice {
   message: string;
 }
 
-export default function App() {
+function LocalStorageApp() {
   const [view, setView] = useState<View>('dashboard');
   const {
     items,
@@ -951,13 +952,22 @@ export default function App() {
   const bulkDeleteTargets = bulkDeleteResolution?.ok ? bulkDeleteResolution.targets : [];
 
   return (
-    <div className="grid min-h-screen grid-cols-[240px_minmax(0,1fr)] max-[860px]:grid-cols-1">
+    <div className="lb-app-shell">
       <Sidebar current={view} onNavigate={navigate} onSearch={openSearch} />
-      <main
-        className="w-full max-w-[1100px] p-s6 max-[860px]:px-s4 max-[860px]:py-s5"
-        id="main-content"
-        tabIndex={-1}
-      >
+      <div className="lb-main-area">
+        <header className="lb-topbar">
+          <div className="lb-topbar-copy">
+            <span className="lb-eyebrow">LOCAL WORKSPACE</span>
+            <span className="lb-topbar-title">Keep track of every next step</span>
+          </div>
+          <div className="lb-topbar-actions">
+            <span className="lb-sync-state">
+              <span className="lb-sync-dot" aria-hidden="true" />
+              Saved in this browser
+            </span>
+          </div>
+        </header>
+        <main className="lb-local-content" id="main-content" tabIndex={-1}>
         {recovery.kind !== 'none' && !recoveryDismissed && (
           <RecoveryNotice
             state={recovery}
@@ -1020,7 +1030,8 @@ export default function App() {
         {view === 'reports' && (
           <Reports items={items} onOpen={openDetails} onRestoreBackup={openRestore} />
         )}
-      </main>
+        </main>
+      </div>
 
       {(undoEntry || undoError) && (
         <UndoBar
@@ -1177,4 +1188,12 @@ export default function App() {
       )}
     </div>
   );
+}
+
+
+/** Local browser mode remains the default; API mode is explicitly opt-in. */
+export default function App() {
+  return import.meta.env.VITE_DATA_MODE === 'api'
+    ? <ApiModeApp />
+    : <LocalStorageApp />;
 }

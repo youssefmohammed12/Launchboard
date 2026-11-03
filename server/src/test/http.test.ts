@@ -2,9 +2,10 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MAX_BACKUP_BYTES } from '@launchboard/domain';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { createApp, JSON_BODY_LIMIT_BYTES } from '../app.js';
+import { ApiError } from '../errors.js';
 import { validateBody, validatedBody } from '../middleware/validateBody.js';
 import { withTestServer } from './helpers/server.js';
 
@@ -131,6 +132,68 @@ describe('error responses', () => {
     });
   });
 
+  it('logs authentication and rate-limit failures with request IDs but no sensitive values', async () => {
+    const secretValue = 'sensitive-token-or-email-value';
+    const app = createApp({
+      logErrors: true,
+      registerRoutes: (routes) => {
+        routes.get('/__test/auth-failure', (_req, _res, next) => {
+          next(new ApiError(401, 'UNAUTHORIZED', secretValue));
+        });
+        routes.get('/__test/rate-limited', (_req, _res, next) => {
+          next(new ApiError(429, 'RATE_LIMITED', secretValue));
+        });
+      },
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    try {
+      await withTestServer(app, async (baseUrl) => {
+        const authFailure = await fetch(`${baseUrl}/__test/auth-failure`);
+        const rateLimited = await fetch(`${baseUrl}/__test/rate-limited`);
+
+        expect(authFailure.status).toBe(401);
+        expect(rateLimited.status).toBe(429);
+        expect(warn).toHaveBeenCalledWith(
+          `[launchboard-api] ${authFailure.headers.get('x-request-id')} UNAUTHORIZED`,
+        );
+        expect(warn).toHaveBeenCalledWith(
+          `[launchboard-api] ${rateLimited.headers.get('x-request-id')} RATE_LIMITED`,
+        );
+        expect(JSON.stringify(warn.mock.calls)).not.toContain(secretValue);
+      });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('logs server failures with request IDs without serializing raw error details', async () => {
+    const secretValue = 'sensitive SQL parameter or credential';
+    const app = createApp({
+      logErrors: true,
+      registerRoutes: (routes) => {
+        routes.get('/__test/server-error', () => {
+          throw new Error(secretValue);
+        });
+      },
+    });
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    try {
+      await withTestServer(app, async (baseUrl) => {
+        const response = await fetch(`${baseUrl}/__test/server-error`);
+
+        expect(response.status).toBe(500);
+        expect(error).toHaveBeenCalledWith(
+          `[launchboard-api] ${response.headers.get('x-request-id')} INTERNAL_ERROR`,
+        );
+        expect(JSON.stringify(error.mock.calls)).not.toContain(secretValue);
+      });
+    } finally {
+      error.mockRestore();
+    }
+  });
+
   it('keeps the transport limit above the backup file limit', () => {
     expect(JSON_BODY_LIMIT_BYTES).toBe(MAX_BACKUP_BYTES + 1024 * 1024);
   });
@@ -213,6 +276,39 @@ describe('body validation middleware', () => {
   });
 });
 
+describe('auth routes without a database pool', () => {
+  it('returns 503 for GET /api/auth/csrf', async () => {
+    await withTestServer(createApp({ logErrors: false }), async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/auth/csrf`);
+      expect(response.status).toBe(503);
+      const body = (await response.json()) as { error: { code: string; message: string; requestId: string } };
+      expect(body.error.code).toBe('NOT_READY');
+      expect(body.error.requestId).toBe(response.headers.get('x-request-id'));
+    });
+  });
+
+  it('returns 503 for POST /api/auth/pre-session even without auth env', async () => {
+    await withTestServer(createApp({ logErrors: false }), async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/auth/pre-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      expect(response.status).toBe(503);
+      const text = await response.text();
+      const body = JSON.parse(text) as { error: { code: string; message: string; requestId: string } };
+      expect(body.error.code).toBe('NOT_READY');
+      expect(text).not.toMatch(/mysql|pool|database/i);
+    });
+  });
+
+  it('keeps /api/health returning 200 without a database', async () => {
+    await withTestServer(createApp({ logErrors: false }), async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/health`);
+      expect(response.status).toBe(200);
+    });
+  });
+});
 describe('app and server separation', () => {
   it('does not call listen in app.ts', () => {
     const here = dirname(fileURLToPath(import.meta.url));

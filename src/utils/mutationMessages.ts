@@ -5,4 +5,4 @@
 export const SAVE_FAILURE_MESSAGE =
   'Changes could not be saved. Your previous data is unchanged. Please try again.';
 
-export type MutationOutcome = boolean | void;
+export type MutationOutcome = boolean | void | Promise<boolean | void>;

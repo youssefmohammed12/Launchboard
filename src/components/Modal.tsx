@@ -16,6 +16,8 @@ interface ModalProps {
   opener?: HTMLElement | null;
   /** Id of an element to focus when the opener is gone (e.g. a deleted row). */
   fallbackFocusId?: string;
+  /** Prevents closing while a non-cancellable server mutation is in flight. */
+  closeDisabled?: boolean;
 }
 
 /**
@@ -29,7 +31,7 @@ interface ModalProps {
  * When React unmounts the dialog, the cleanup restores focus to the element
  * that opened it; removing an open dialog would otherwise drop focus to <body>.
  */
-export function Modal({ title, onClose, children, initialFocusId, opener, fallbackFocusId }: ModalProps) {
+export function Modal({ title, onClose, children, initialFocusId, opener, fallbackFocusId, closeDisabled = false }: ModalProps) {
   const ref = useRef<HTMLDialogElement>(null);
   /** The element that should regain focus when the dialog closes. */
   const openerRef = useRef<HTMLElement | null>(null);
@@ -79,6 +81,7 @@ export function Modal({ title, onClose, children, initialFocusId, opener, fallba
   }, [initialFocusId]);
 
   const requestClose = () => {
+    if (closeDisabled) return;
     const dialog = ref.current;
     if (dialog?.open) {
       // Closing through the dialog element lets the browser restore focus to
@@ -95,8 +98,11 @@ export function Modal({ title, onClose, children, initialFocusId, opener, fallba
       className="m-auto max-h-[calc(100vh_-_32px)] w-[min(640px,calc(100vw_-_32px))] overflow-auto rounded-card border-0 bg-surface p-0 text-text shadow-modal backdrop:bg-[rgba(23,33,43,0.5)]"
       aria-labelledby="modal-title"
       onClose={onClose}
+      onCancel={(event) => {
+        if (closeDisabled) event.preventDefault();
+      }}
       onClick={(e) => {
-        if (e.target === ref.current) requestClose(); // backdrop click
+        if (!closeDisabled && e.target === ref.current) requestClose(); // backdrop click
       }}
     >
       <div className="sticky top-0 z-[1] flex items-center justify-between border-b border-border bg-surface px-s5 py-s4">
@@ -105,6 +111,7 @@ export function Modal({ title, onClose, children, initialFocusId, opener, fallba
           type="button"
           className="inline-grid h-[34px] w-[34px] cursor-pointer place-items-center rounded-control border-0 bg-transparent text-muted hover:bg-accent-soft hover:text-accent-dark"
           aria-label="Close dialog"
+          disabled={closeDisabled}
           onClick={requestClose}
         >
           <X size={18} />

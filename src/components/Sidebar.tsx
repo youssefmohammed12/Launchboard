@@ -1,4 +1,14 @@
-import { CalendarClock, CalendarDays, ChartColumn, LayoutDashboard, ListChecks, Rocket, Search, type LucideIcon } from 'lucide-react';
+import {
+  CalendarClock,
+  CalendarDays,
+  ChartColumn,
+  LayoutDashboard,
+  ListChecks,
+  Rocket,
+  Search,
+  ShieldCheck,
+  type LucideIcon,
+} from 'lucide-react';
 import type { View } from '../types/opportunity';
 
 const ITEMS: { view: View; label: string; icon: LucideIcon }[] = [
@@ -14,53 +24,69 @@ interface Props {
   onNavigate: (view: View) => void;
   /** Opens global search; the trigger is recorded for focus restoration. */
   onSearch: (trigger?: HTMLElement | null) => void;
+  storageDescription?: string;
 }
 
-export function Sidebar({ current, onNavigate, onSearch }: Props) {
+export function Sidebar({
+  current,
+  onNavigate,
+  onSearch,
+  storageDescription = 'Data is stored in this browser only.',
+}: Props) {
   return (
-    <aside className="sticky top-0 flex h-screen flex-col gap-s5 bg-sidebar px-s4 py-s5 text-sidebar-text [&_:focus-visible]:outline-[#7fd1c9] max-[860px]:static max-[860px]:h-auto max-[860px]:flex-row max-[860px]:items-center max-[860px]:gap-s3 max-[860px]:overflow-x-auto max-[860px]:py-s3">
-      <div className="flex items-center gap-s2 px-s2 text-[1.1rem] font-bold text-white">
-        <Rocket size={20} aria-hidden />
-        <span className="max-[640px]:hidden">Launchboard</span>
+    <aside className="lb-sidebar">
+      <div className="lb-sidebar-brand">
+        <span className="lb-logo-mark" aria-hidden="true">
+          <Rocket size={20} strokeWidth={2.2} />
+        </span>
+        <div>
+          <span className="lb-brand-name">Launchboard</span>
+          <span className="lb-brand-tag">OPPORTUNITY WORKSPACE</span>
+        </div>
       </div>
+
       <button
         type="button"
-        className="flex w-full cursor-pointer items-center gap-s3 rounded-control border border-white/[0.14] bg-white/[0.06] px-s3 py-2.5 text-left text-inherit [font:inherit] hover:bg-white/[0.1] max-[860px]:w-auto max-[860px]:whitespace-nowrap max-[860px]:py-2"
+        className="lb-search-trigger"
         aria-label="Search Launchboard"
         aria-keyshortcuts="Control+K Meta+K"
         onClick={(event) => onSearch(event.currentTarget)}
       >
-        <Search size={18} aria-hidden />
-        <span className="max-[640px]:hidden">Search Launchboard</span>
-        <kbd className="ml-auto rounded-[4px] border border-white/20 px-[5px] py-[1px] font-sans text-[0.7rem] text-sidebar-text/80 max-[860px]:hidden">
-          Ctrl K
-        </kbd>
+        <Search size={17} aria-hidden="true" />
+        <span>Search anything</span>
+        <kbd>Ctrl K</kbd>
       </button>
-      <nav aria-label="Main">
-        <ul className="grid gap-s1 max-[860px]:flex">
+
+      <nav className="lb-primary-nav" aria-label="Main">
+        <span className="lb-nav-caption">WORKSPACE</span>
+        <ul className="lb-nav-list">
           {ITEMS.map(({ view, label, icon: Icon }) => (
             <li key={view}>
               <button
                 type="button"
-                className={`flex w-full cursor-pointer items-center gap-s3 rounded-control border-0 bg-transparent px-s3 py-2.5 text-left text-inherit [font:inherit] max-[860px]:w-auto max-[860px]:whitespace-nowrap max-[860px]:py-2 ${
-                  current === view
-                    ? 'bg-white/[0.12] text-white'
-                    : 'hover:bg-white/[0.07]'
-                }`}
+                className="lb-nav-link"
                 aria-current={current === view ? 'page' : undefined}
                 aria-label={label}
                 onClick={() => onNavigate(view)}
               >
-                <Icon size={18} aria-hidden />
-                <span className="max-[640px]:hidden">{label}</span>
+                <Icon size={18} aria-hidden="true" />
+                <span>{label}</span>
               </button>
             </li>
           ))}
         </ul>
       </nav>
-      <p className="mt-auto px-s2 text-xs max-[860px]:hidden">
-        Data is stored in this browser only.
-      </p>
+
+      <div className="lb-sidebar-spacer" />
+      <div className="lb-sidebar-footer">
+        <span className="lb-sidebar-footer-icon" aria-hidden="true">
+          <ShieldCheck size={16} />
+        </span>
+        <div>
+          <strong>Private workspace</strong>
+          <span>{storageDescription}</span>
+        </div>
+      </div>
     </aside>
   );
 }

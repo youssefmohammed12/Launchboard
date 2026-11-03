@@ -56,7 +56,10 @@ function main(): void {
     return;
   }
 
-  const app = createApp({ database });
+  const app = createApp({
+    database,
+    dbPool: database ? database.getPool() : null,
+  });
   const server = app.listen(config.port, config.host, () => {
     console.log(
       `[launchboard-api] Listening on http://${displayHost(config.host)}:${config.port} (${config.nodeEnv}).`,

@@ -1,8 +1,8 @@
 # Launchboard Backend Contract
 
-**Status: design only.** No backend directory, server code, SQL migration, dependency, or database change exists yet. This document is the implementation guide for the future Node.js + Express + TypeScript + MySQL/MariaDB backend.
+**Status: implemented contract.** The React/Vite frontend supports a default localStorage workspace and an opt-in authenticated API workspace. The Express/TypeScript API, shared domain package, user-scoped opportunity aggregate, nested workspace, bulk actions/Undo, version-1 backup import/export, email verification, and password recovery are implemented. The hosted application is deployed on Vercel and uses TiDB Cloud Serverless; local development is supported with MySQL/MariaDB. Local database and release checks are documented in docs/deployment-readiness.md. This document describes the current Node.js + Express + TypeScript + MySQL-compatible backend contract.
 
-The current application remains localStorage-only. `launchboard.opportunities.v1`, `launchboard.recovery.raw.v1`, `launchboard.views.v1`, the version-1 backup envelope, and all current user-visible behavior are unchanged by this document.
+The browser app supports localStorage and opt-in API modes. `launchboard.opportunities.v1`, `launchboard.recovery.raw.v1` and `launchboard.views.v1` remain browser-local keys; API mode does not replace or delete them. Saved Views remain local preferences.
 
 ---
 
@@ -72,7 +72,7 @@ The authoritative frontend type is `src/types/opportunity.ts`.
 
 ---
 
-## 2. Target architecture
+## 2. Implemented architecture
 
 ```
 React SPA (Vite)
@@ -80,7 +80,7 @@ React SPA (Vite)
   ├─ useOpportunities
   └─ OpportunityRepository
         ├─ LocalStorageOpportunityRepository (tests / local mode)
-        └─ HttpOpportunityRepository (future)
+        └─ HttpOpportunityRepository (implemented; opt-in API mode)
                     │ HTTPS + session cookie
                     ▼
 Express + TypeScript API
@@ -93,30 +93,36 @@ MySQL / MariaDB database `launchboard`
 ```
 
 - The SPA and API are separate deployable pieces, but production should serve both from one origin (reverse proxy or Express static hosting) to simplify cookies and CSRF.
-- The backend must reuse the same domain rules as the frontend. Those rules now live in the npm workspace package `packages/domain` (`@launchboard/domain`): domain types and controlled values, field/collection limits, strict calendar-date rules, tag normalization, field predicates and the version-1 backup envelope. The frontend consumes it through re-export wrappers; the backend must import the same public entry point. Do not maintain a second copy. Permissive storage normalizers intentionally remain frontend-only; server request validation is separate and strict.
+- The backend reuses the same domain rules as the frontend. Those rules live in `packages/domain` (`@launchboard/domain`): domain types and controlled values, field/collection limits, strict calendar-date rules, tag normalization, field predicates, the version-1 backup envelope and the shared backup-record normalizer. The frontend consumes shared rules through re-export wrappers, and its version-1 backup file-import parser uses `normalizeBackupOpportunityRecord`. Browser localStorage recovery remains frontend-only; ordinary server request validation remains strict.
 - Saved Views remain browser-local under `launchboard.views.v1`. They are preferences, not opportunity data, and do not justify a server table in the first backend implementation.
 
 ---
 
 ## 3. Authentication and ownership
 
-### 3.1 Recommended model
+### 3.1 Implemented session model
 
 Use **server-side sessions stored in MySQL**, delivered in an `HttpOnly` cookie. This is more appropriate than JWT for this project because logout and revocation are immediate, there is no need for third-party API clients, and session state is easy to reason about in a learning project.
 
 | Concern | Decision |
 |---|---|
-| Registration | Email + password. Open registration, rate-limited. No email verification in v1. |
-| Password storage | Argon2id preferred (memory 19 MiB, iterations 2, parallelism 1). If native Argon2 installation is a problem on Windows, bcrypt with cost 12 is an acceptable fallback. Never store or log plaintext. |
-| Password rules | Minimum 12 characters, maximum 128. Do not impose composition rules. Reject passwords equal to the email. |
+| Registration | Email + password. Rate-limited; new accounts must verify email before they can authenticate. |
+| Password storage | Argon2id (memory 19 MiB, iterations 2, parallelism 1, output length 32 bytes). No automatic bcrypt fallback. Never store or log plaintext. |
+| Password rules | Minimum 15 characters, maximum 128 Unicode code points (UTF-8 byte cap 1,024). Do not impose composition rules, trim, or silently truncate. |
 | Login | Generic `INVALID_CREDENTIALS` response; never reveal whether the email exists. |
 | Session token | 32 random bytes, base64url. Store only its SHA-256 hash in the database. |
-| Cookie | `launchboard_session`, `HttpOnly`, `Secure` in production, `SameSite=Lax`, `Path=/`, 14-day expiry. |
-| Logout | Delete the session row and clear the cookie. |
-| Session expiry | 14 days absolute. `last_seen_at` is updated at most hourly for audit; it does not extend the session. |
-| CSRF | Double-submit token: readable `launchboard_csrf` cookie plus `X-CSRF-Token` header required on every `POST`/`PUT`/`PATCH`/`DELETE`. Also verify `Origin` against the configured app origin. |
-| Rate limits | Register 5/hour/IP; login 10/15 min/IP and 5/15 min/email; authenticated mutations 100/min/user; import 5/hour/user. Return `429` with `Retry-After`. |
-| Password reset / email verification | Out of scope for v1. Document that a forgotten password requires an administrative reset. |
+| Cookie | `launchboard_session` in local development and `__Host-launchboard_session` in production; `HttpOnly`, `Secure` in production, `SameSite=Lax`, `Path=/`, 7-day absolute expiry. |
+| Logout | Revoke only the current session row and clear the cookie. |
+| Session expiry | 30-minute idle timeout and 7-day absolute lifetime. Successful non-safe authenticated requests update `last_seen_at`; GET/HEAD/OPTIONS remain read-only. The absolute expiry never moves. |
+| CSRF | Deterministic HMAC-derived synchronizer token bound to the pre-auth/authenticated session context; no CSRF token hash is stored. Return the raw token to the SPA and require `X-CSRF-Token` on state-changing requests. Also verify `Origin` against the configured exact-origin allowlist. No double-submit cookie. |
+| Rate limits | Approved in Stage 5: pre-session 10/15 min/IP; register 3/hour/IP; login 5/15 min/IP and 10/15 min/normalized email. Counters use a process-local MemoryStore. Additional authenticated-mutation/import quotas are not part of the approved authentication policy and remain deferred. |
+| Password reset / email verification | Implemented with purpose-bound, one-time hashed tokens and server-side Gmail SMTP delivery. |
+
+#### Authentication endpoint behavior
+
+- `POST /api/auth/logout`: require exact trusted Origin, JSON content type, an empty JSON object, a valid active authenticated-session cookie and authenticated-context `X-CSRF-Token`. Revoke only that session, clear its cookie and return `204` with `Cache-Control: no-store`. Do not clear the pre-auth cookie or revoke other sessions for the user. Invalid/missing/expired/idle/revoked sessions return 401; Origin/CSRF failures must not revoke anything.
+- `GET /api/auth/me`: read-only lookup of the active session; return `200 { user, csrfToken }` with the authenticated-context deterministic HMAC token, or 401 when unauthenticated. Never touch `last_seen_at`, set cookies, or expose raw session tokens/hashes. Use `Cache-Control: no-store`.
+- Safe methods GET/HEAD/OPTIONS must not mutate auth/session/CSRF state. `createRequireAuth` skips its idle-timeout touch for these methods; non-safe authenticated requests retain the activity touch behavior.
 
 ### 3.2 Ownership enforcement
 
@@ -547,48 +553,52 @@ The server owns the automatic `Status changed` activity.
 
 | Method | Path | Auth | Request | Success | Notes |
 |---|---|---|---|---|---|
-| POST | `/api/auth/register` | no | `{email, password}` | `201 {user, csrfToken}` + session cookie | Rate-limited; duplicate email `409 EMAIL_IN_USE`; validation `422`. |
-| POST | `/api/auth/login` | no | `{email, password}` | `200 {user, csrfToken}` + cookie | Generic `401 INVALID_CREDENTIALS`; rate-limited. |
-| POST | `/api/auth/logout` | yes | — | `204` | Deletes session, clears cookie; requires CSRF. |
-| GET | `/api/auth/me` | yes | — | `200 {user, csrfToken}` | `401 UNAUTHENTICATED` when absent/expired. |
+| POST | /api/auth/register | pre-auth cookie + CSRF | {email, password} | 202 generic response; no session cookie | Creates an unverified account and sends a verification link. Existing/duplicate addresses receive the same response. |
+| POST | /api/auth/verify-email | pre-auth cookie + CSRF | verification token | 200 | Consumes a one-time token; marks the email verified; does not sign in. |
+| POST | /api/auth/resend-verification | pre-auth cookie + CSRF | email address | 202 generic response | Sends only to eligible unverified accounts; avoids account enumeration. |
+| POST | /api/auth/password-reset/request | pre-auth cookie + CSRF | email address | 202 generic response | Sends only to eligible verified accounts; avoids account enumeration. |
+| POST | /api/auth/password-reset/confirm | pre-auth cookie + CSRF | reset token and new password | 200 | Consumes the token, changes the password, and revokes all sessions; does not sign in. |
+| POST | `/api/auth/login` | pre-auth cookie + CSRF | `{email, password}` | `200 {user, csrfToken}` + cookie | Implemented. Consumes pre-auth session only on success; generic `401 INVALID_CREDENTIALS` for missing account/wrong password; approved Argon2id hashes only; rate-limited; no-store. |
+| POST | `/api/auth/logout` | yes | `{}` | `204` | Implemented. Revokes only the current session, clears its cookie; requires exact Origin and authenticated CSRF. |
+| GET | `/api/auth/me` | authenticated session | — | `200 {user, csrfToken}` | Implemented; read-only active-session lookup, no-store, `401 UNAUTHORIZED` when absent/expired/idle/revoked. |
 | GET | `/api/health` | no | — | `200 {status:"ok"}` | Liveness only. |
 | GET | `/api/ready` | no | - | `200 {status:"ok",db:"ok"}` | Read-only. Returns `503 NOT_READY` when the database is unconfigured, unreachable, or not exactly `launchboard`. Never runs migrations. |
 
-`user` is `{id, email}`. The CSRF token is also set as a readable cookie; the body copy lets the SPA initialize without a second request.
+`user` is `{id, email}`. The CSRF token is returned in the response body; it is deterministically re-derived from the active session by `GET /api/auth/csrf` after a refresh. No CSRF cookie or database token-hash column is used.
 
 ### 7.4 Opportunity endpoints
 
 | Method | Path | Auth/ownership | Request | Success | Transaction / version |
 |---|---|---|---|---|---|
-| GET | `/api/opportunities` | yes | optional `?archived=active\|archived\|all` (default `all`) | `200 {revision, items:[Resource]}` | Read-only; excludes soft-deleted; ordered by `position, public_id`. |
-| GET | `/api/opportunities/:id` | yes; owned | — | `200 Resource` | Read-only; other owner/deleted → `404`. |
-| POST | `/api/opportunities` | yes | `{opportunity}` | `201 Resource` | One transaction; new `version=1`; revision increments. |
-| PUT | `/api/opportunities/:id` | yes; owned | `If-Match`, `{opportunity, statusActivityDate?}` | `200 Resource` | One aggregate transaction; `version` increments; revision increments. |
-| DELETE | `/api/opportunities/:id` | yes; owned | `If-Match` | `200 {deletionBatchId, expiresAt, deleted:[{id,version}]}` | Soft delete + batch; revision increments. |
-| POST | `/api/opportunities/:id/archive` | yes; owned | `If-Match` | `200 Resource` | Sets `archivedAt` to server UTC time; version/revision increment. |
-| POST | `/api/opportunities/:id/restore` | yes; owned | `If-Match` | `200 Resource` | Clears `archivedAt`; version/revision increment. |
+| GET | `/api/opportunities` | yes | optional `?archived=active\|archived\|all` (default `all`) | `200 {revision, items:[Resource]}` | Implemented in Stage 6. Read-only; excludes soft-deleted; ordered by `position, public_id`. |
+| GET | `/api/opportunities/:id` | yes; owned | — | `200 Resource` | Implemented in Stage 6; read-only; other owner/deleted → `404`. |
+| POST | `/api/opportunities` | yes | `{opportunity}` | `201 Resource` | Implemented in Stages 6–7. One transaction; server assigns append position and `version=1`; parent and nested collections persist atomically; revision increments. |
+| PUT | `/api/opportunities/:id` | yes; owned | `If-Match`, `{opportunity, statusActivityDate?}` | `200 Resource` | Implemented in Stages 6–7. Row lock/version check, full nested aggregate replacement, server-owned system activity invariants, one transaction, version/revision increments. |
+| DELETE | `/api/opportunities/:id` | yes; owned | `If-Match` (JSON content type; no body required) | `200 {deletionBatchId, expiresAt, deleted:[{id,version}]}` | Implemented in Stage 6. Soft delete + ten-second Undo batch; version/revision increment; children remain attached until later Undo/purge stages. |
+| POST | `/api/opportunities/:id/archive` | yes; owned | `If-Match` (JSON content type; no body required) | `200 Resource` | Implemented in Stage 6. Sets `archivedAt` to server UTC time; version/revision increment only when state changes. |
+| POST | `/api/opportunities/:id/restore` | yes; owned | `If-Match` (JSON content type; no body required) | `200 Resource` | Implemented in Stage 6. Clears `archivedAt`; version/revision increment only when state changes. |
 
 **Write body rules:**
 
 - `opportunity.id` must equal the path ID on `PUT`. On `POST` the client may supply an ID (preserving its current `createId()` behavior); if omitted the server generates a UUID. A supplied ID that already exists for the user is `409 DUPLICATE_ID`.
 - `archivedAt` is server-managed. Do not accept it on create/update; archive/restore endpoints own it. Import accepts it.
 - `isDemo` is preserved from storage; normal create/update may send false/omit it. Import preserves true.
-- `tags`, `interviews`, `contacts`, `materials`, `activities` are replaced wholesale on `PUT`, after validation and system-activity invariants.
+- Stages 6–7 implement full nested aggregate create/read/update. Tags, contacts, interviews, materials and user activities are persisted and returned in stored order. Create/update replace child collections within the parent transaction. Interview contact references must resolve within the same opportunity; clients must clear/remove references when deleting a contact. System-owned `Status changed` activities must be echoed unchanged and in order; only the server creates them.
 - `title`/`company` must be non-empty after trimming. `type`/`status`/`priority` must be exact allowlist values. Non-empty `url` must be HTTP(S). Dates must be real `YYYY-MM-DD` or `''`. Interview time must be `HH:mm` or `''`. Enforce all nested caps and field lengths.
 - For normal writes, reject invalid values with `422 VALIDATION_ERROR`; do not silently repair. Import uses the existing repair/skip rules.
 
 ### 7.5 Bulk and Undo endpoints
 
-All bulk endpoints are all-or-nothing. `items` is a non-empty array of `{id, expectedVersion}`. Duplicate IDs in a request are `422 DUPLICATE_REQUEST_ID`. A missing/wrong-owner/deleted ID is `404`/`409 BULK_CONFLICT` and the batch changes nothing.
+All bulk endpoints are all-or-nothing and require the authenticated session, exact trusted Origin, JSON content type and authenticated-context CSRF. `items` is a non-empty array of `{id, expectedVersion}`. Duplicate IDs in a request return `422 DUPLICATE_REQUEST_ID`. Missing, wrong-owner, deleted, stale-version or wrong-state items return `409 BULK_CONFLICT` with per-item failure reasons; the batch changes nothing. Opportunity rows are locked sequentially in deterministic public-ID order. Each successful bulk mutation increments the per-user collection revision once and increments each changed opportunity's version once.
 
 | Method | Path | Request | Success | Rules |
 |---|---|---|---|---|
-| POST | `/api/opportunities/bulk/archive` | `{items}` | `200 {revision, items:[Resource]}` | Every item must be active; any already-archived item fails the batch with `409 BULK_CONFLICT`. One timestamp for the batch. |
-| POST | `/api/opportunities/bulk/restore` | `{items}` | `200 {revision, items:[Resource]}` | Every item must be archived; any active item fails the batch. |
-| POST | `/api/opportunities/bulk/status` | `{items, status, statusActivityDate}` | `200 {revision, items:[Resource]}` | Every item must currently differ from `status`; one status activity per changed record. |
-| POST | `/api/opportunities/bulk/delete` | `{items, archiveView}` | `200 {deletionBatchId, expiresAt, deleted:[…]}` | Every item must match `archiveView`; one soft-delete batch. |
-| POST | `/api/opportunities/bulk/undo-archive` | `{items:[{id, expectedArchivedAt, previousArchivedAt}]}` | `200 {revision, items:[Resource]}` | Reverses only archive metadata if the current `archivedAt` still matches `expectedArchivedAt`; other fields are preserved. |
-| POST | `/api/opportunities/deletions/:batchId/restore` | — | `200 {revision, items:[Resource]}` | Restores a soft-delete batch if owned, unexpired and not already restored. |
+| POST | `/api/opportunities/bulk/archive` | `{items}` | `200 {revision, items:[Resource]}` | Implemented. All records must be active; one DB UTC timestamp; deterministic row-lock order; all-or-nothing transaction. |
+| POST | `/api/opportunities/bulk/restore` | `{items}` | `200 {revision, items:[Resource]}` | Implemented. All records must be archived; deterministic locks; all-or-nothing transaction. |
+| POST | `/api/opportunities/bulk/status` | `{items, status, statusActivityDate}` | `200 {revision, items:[Resource]}` | Implemented. Every item must differ from the target status; appends one server activity per item. |
+| POST | `/api/opportunities/bulk/delete` | `{items, archiveView}` | `200 {deletionBatchId, expiresAt, deleted:[…]}` | Implemented. Every item must match `archiveView`; one ten-second deletion batch and one DB UTC deletion timestamp. |
+| POST | `/api/opportunities/bulk/undo-archive` | `{items:[{id, expectedArchivedAt, previousArchivedAt}]}` | `200 {revision, items:[Resource]}` | Implemented. Changes only archive metadata if the current `archivedAt` still matches `expectedArchivedAt`; other fields are preserved. |
+| POST | `/api/opportunities/deletions/:batchId/restore` | empty JSON object | `200 {revision, items:[Resource]}` | Implemented. Locks owned batch, rejects expired/already-restored batches, and restores all batch records atomically. |
 
 `expectedArchivedAt`/`previousArchivedAt` are `null` for active and ISO UTC strings for archived. This preserves the current Undo policy: a later edit that did not change archive state does not block Undo, while a changed archive state does.
 
@@ -614,9 +624,9 @@ Rules:
 
 - Maximum 5 MiB and 20,000 records, matching the frontend.
 - Validate the envelope before parsing records. Invalid JSON/envelope/schema → `422 INVALID_BACKUP` with a specific `details.reason`.
-- Normalize each record with the shared canonical normalizer. Invalid records and duplicate IDs inside the backup are skipped and counted, not fatal.
-- `merge`: insert records whose `(user_id, public_id)` does not exist; skip existing IDs.
-- `replace`: requires `confirmReplace: true` and `expectedRevision` equal to the current collection revision. It hard-deletes current opportunities (cascading children) and inserts the valid unique incoming records in one transaction. A stale revision returns `409 STALE_REVISION`.
+- Normalize each record with the shared `normalizeBackupOpportunityRecord` domain helper. Invalid records and duplicate IDs inside the backup are skipped and counted, not fatal. The browser version-1 file-import parser uses the same helper; browser localStorage recovery remains separate.
+- `merge`: insert records whose `(user_id, public_id)` does not exist, including soft-deleted tombstones in the existence check; skip every existing ID so the unique key cannot be hit and a retry never overwrites data.
+- `replace`: requires `confirmReplace: true` and `expectedRevision` equal to the current collection revision. It hard-deletes every opportunity row owned by the user, including soft-deleted tombstones, in one transaction. Dependent rows are deleted in FK-safe order (interviews before contacts), then old deletion-batch records are cleared, and valid unique incoming records are inserted. This also invalidates any pending deletion Undo batches. A stale revision returns `409 STALE_REVISION`.
 - `dryRun: true` returns the same counts without writing and without changing `revision`.
 - `ImportResult`:
 
@@ -645,13 +655,13 @@ Rules:
 
 | Code | HTTP | Meaning |
 |---|---|---|
-| `UNAUTHENTICATED` | 401 | Missing/expired session. |
+| `UNAUTHORIZED` | 401 | Missing/expired session. |
 | `INVALID_CREDENTIALS` | 401 | Login failed; no email enumeration. |
-| `EMAIL_IN_USE` | 409 | Registration email already exists. |
 | `FORBIDDEN` | 403 | CSRF/origin failure or an explicitly forbidden action. Cross-user resource access uses 404. |
 | `NOT_FOUND` | 404 | Resource missing, soft-deleted, or not owned. |
 | `INVALID_JSON` | 400 | The request body is not valid JSON. |
-| `INVALID_REQUEST` | 400–499 | Another malformed transport request, such as an unsupported charset. |
+| `INVALID_REQUEST` | 400–499 | Another malformed transport request, such as an unsupported charset or unexpected mutation body. |
+| `BAD_REQUEST` | 400 | Malformed query parameter or invalid `If-Match` value. |
 | `PRECONDITION_REQUIRED` | 428 | A mutation arrived without `If-Match` or `expectedVersion`. |
 | `VALIDATION_ERROR` | 422 | Invalid field/enum/date/URL/limit; `details.fields`. |
 | `SYSTEM_ACTIVITY_IMMUTABLE` | 422 | A `Status changed` activity was added, edited or removed by the client. |
@@ -661,7 +671,7 @@ Rules:
 | `BULK_CONFLICT` | 409 | At least one batch item is missing/stale/wrong-state; `details.failures`. |
 | `DUPLICATE_ID` | 409 | Create/import ID already exists for this user. |
 | `DUPLICATE_REQUEST_ID` | 422 | Duplicate IDs inside one request. |
-| `INVALID_BACKUP` | 422 | Bad envelope/schema/JSON/record plan. |
+| `INVALID_BACKUP` | 422 | Bad envelope/schema/JSON or unsupported backup; `details.reason` identifies `invalid-json`, `invalid-envelope`, `unsupported-schema` or `too-many-records`. Invalid individual records are skipped and counted in a valid import plan. |
 | `PAYLOAD_TOO_LARGE` | 413 | Body or backup exceeds the limit. |
 | `NOT_READY` | 503 | Database configuration is absent or the readiness check failed. No connection details are returned. |
 | `RATE_LIMITED` | 429 | Rate limit exceeded; includes `Retry-After`. |
@@ -692,7 +702,7 @@ The envelope is unchanged: `format: "launchboard-backup"`, `schemaVersion: 1`, `
 3. Require the exact format string, a numeric `schemaVersion`, and an `opportunities` array.
 4. Reject `schemaVersion !== 1` as `unsupported-schema`. Unknown newer versions are never guessed at.
 5. Reject more than 20,000 records as `too-many-records`.
-6. Run each record through the shared canonical normalizer (`normalizeOpportunityRecord` semantics). Count repaired, invalid and duplicate records instead of failing the whole file.
+6. Run each record through the shared domain helper `normalizeBackupOpportunityRecord`, which applies the established backup repair semantics and server-safe public-ID limits. Count repaired, invalid and duplicate records instead of failing the whole file. The browser version-1 file-import parser now uses this same helper; browser localStorage recovery remains separate.
 7. Validate nested references after normalization: interview `contactId` must be `''` or an ID present in the same record's contacts. A dangling reference is repaired to `''` and counted as repaired, matching the current `repairInterviewContactReferences` behavior.
 
 `exportedAt` is advisory. It is never trusted as an audit timestamp and is never used to set `created_at`.
@@ -709,10 +719,10 @@ The envelope is unchanged: `format: "launchboard-backup"`, `schemaVersion: 1`, `
 
 | Mode | Authorization | Behavior |
 |---|---|---|
-| `merge` | Session only | Insert only IDs not already owned by the user. Never modify an existing opportunity. Append after the current maximum `position`, preserving backup order. |
-| `replace` | `confirmReplace: true` **and** `expectedRevision` equal to the current `opportunity_revision` | Delete all current non-deleted opportunities and their children (dependency order from §6.4), then insert the valid unique incoming records. One transaction. |
+| `merge` | Session only | Insert only IDs not already owned by the user, including IDs still reserved by soft-deleted tombstones. Never modify an existing opportunity. Append after the current maximum active `position`, preserving backup order. |
+| `replace` | `confirmReplace: true` **and** `expectedRevision` equal to the current `opportunity_revision` | Delete every opportunity row owned by the user, including active, archived and soft-deleted rows, in FK-safe order. Clear old deletion-batch records and insert valid unique incoming records in the same transaction. |
 
-`replace` is destructive. It is rejected with `409 STALE_REVISION` if the collection changed since the client read it, which forces the UI to re-confirm. The current frontend already requires explicit confirmation for replace; the server keeps that requirement and adds revision protection so a stale tab cannot wipe newer data.
+`replace` is destructive. It is rejected with `409 STALE_REVISION` if the collection changed since the client read it, which forces the UI to re-confirm. It permanently purges soft-deleted tombstones and any pending deletion Undo batches as well as visible records. The `replaced` count reports visible (non-deleted) opportunities removed; hidden tombstones are also purged. The current frontend already requires explicit confirmation for replace; the server keeps that requirement and adds revision protection so a stale tab cannot wipe newer data.
 
 Both modes are all-or-nothing. A database failure during `replace` rolls back to the previous collection. A failure during `merge` inserts nothing. Partial imports never leave a half-migrated account.
 
@@ -781,7 +791,7 @@ interface OpportunityRepository {
 
 ### 9.4 What stays reusable
 
-Extracted into `@launchboard/domain` and shared unchanged: domain types and enums, field and collection limits, calendar-date rules, tag normalization, URL/time/email predicates, and the backup envelope. The permissive normalizers in `contacts.ts`, `interviews.ts`, `materials.ts`, `activities.ts`, `archive.ts` and `storage.ts` deliberately stay in the frontend: they repair stored data rather than validate requests. Filtering, calendar, global search, Saved Views and CSV formatting also remain frontend-only.
+Extracted into `@launchboard/domain` and shared unchanged: domain types and enums, field and collection limits, calendar-date rules, tag normalization, URL/time/email predicates, the backup envelope and the version-1 backup-record normalizer. The browser file-import parser uses the shared backup normalizer. Browser localStorage recovery normalizers in `contacts.ts`, `interviews.ts`, `materials.ts`, `activities.ts`, `archive.ts` and `storage.ts` remain frontend-only. Filtering, calendar, global search, Saved Views and CSV formatting also remain frontend-only.
 
 The local adapter remains useful: it keeps unit and component tests fast, supports an offline/local mode, and acts as a reference implementation for the async contract. It implements the same async interface and returns synthetic versions.
 
@@ -800,29 +810,31 @@ Each stage must leave the existing frontend fully working. No stage may point th
 
 | # | Stage | Deliverable | Acceptance criteria |
 |---|---|---|---|
-| 1 | Shared domain extraction | Move pure types, enums, limits, date/tag/field rules and the backup envelope into `packages/domain`; keep permissive normalizers frontend-only | Frontend tests still pass unchanged; the package builds; no duplicated rule implementations |
+| 1 | Shared domain extraction | Move pure types, enums, limits, date/tag/field rules, backup envelope and shared v1 backup-record normalizer into `packages/domain`; keep browser localStorage recovery normalizers frontend-only | Frontend tests still pass unchanged; the package builds; no duplicated rule implementations |
 | 2 | Backend foundation | `server/` package: Express app, TypeScript config, error middleware, request IDs, health/ready routes | `npm run build` and `npm run dev` work; `/api/health` returns 200; no database access yet |
 | 3 | Config and database connectivity | Env validation, `mysql2` pool, `time_zone='+00:00'`, connection check on `/api/ready` | Missing/invalid env fails fast with a clear message; no secret in source |
 | 4 | Schema and migrations | `launchboard` database, migration runner, all tables and constraints | Migrations run forward on a fresh database; no statement references `healthbridge` or `nova_home` |
-| 5 | Authentication | Register, login, logout, me; Argon2id/bcrypt hashing; hashed session tokens; CSRF; rate limits | Duplicate email and bad password return safe errors; session survives reload; logout revokes |
-| 6 | Opportunity read/create/update/delete | Aggregate serialization, ownership scoping, `version` + `If-Match`, soft delete | Cross-user access returns 404; stale update returns 409 and does not write |
-| 7 | Nested workspaces and activities | Interviews, contacts, materials, tags, activities in the aggregate transaction; server-owned status activity | Contact deletion preserves interviews and clears references; status history matches current text |
+| 5 | Authentication | Register, login, logout, me; Argon2id; hashed session tokens; HMAC-derived CSRF; rate limits | Complete: all four handlers implemented, focused mocked-repository tests pass, safe methods are read-only, and Stage 11I review is complete. Duplicate email and bad credentials return safe errors; logout revokes only the current session; `/me` is read-only |
+| 6 | Opportunity core API | User-scoped collection/single reads, create/update, soft delete, archive/restore, server versions and `If-Match` | Complete: focused mocked-database tests pass; cross-user access returns 404; stale writes return 409 without modifying records |
+| 7 | Nested workspaces and activities | Full interviews, contacts, materials, tags and user activities in the aggregate transaction; expand server-owned status history | Complete: focused mocked-database tests pass; child collections persist and load in order; contact references and immutable system activities are enforced; nested failures roll back the aggregate |
 | 8 | Bulk operations and Undo | Bulk archive/restore/status/delete, deletion batches, batch restore | Any bad item rolls back the whole batch; expired Undo returns 410 |
-| 9 | Import/export and migration | Version-1 validation, merge/replace, dry run, export, client migration flow | Backup round-trips byte-compatible; replace is atomic; retry is idempotent |
-| 10 | Frontend integration and deployment | `HttpOpportunityRepository`, async `useOpportunities`, `useAuth`, loading/conflict UI | Full manual workflow on the API; local adapter still passes the test suite |
+| 9 | Import/export API | Version-1 server validation, export, merge, dry-run, revision-guarded atomic replace and documented local migration procedure | Focused mocked tests cover round-trip shape, repair/skip counts, idempotent merge, destructive replace guards and rollback; no local data is changed |
+| 10 | Frontend integration and deployment | HttpOpportunityRepository, authenticated API-mode shell, session UI, explicit browser migration and backup adapters | Implemented and deployed. The local adapter remains the default; release verification is recorded in docs/deployment-readiness.md. |
 
-### 10.1 Decisions required before Stage 4 (schema)
+### 10.1 Remaining API and data-policy decisions
 
-These must be settled by a human before tables are created:
+These are the remaining product/data-policy decisions; do not reopen authentication choices already approved and implemented:
 
-1. Final text-length caps for `title`, `company`, `compensation`, `description`, `notes`, `url`. The current frontend has none; the schema uses `TEXT`/`MEDIUMTEXT` to avoid silent truncation, but API limits should be explicit.
+1. Final API text-length caps for `title`, `company`, `compensation`, `description`, `notes`, and opportunity `url`. The current frontend has no explicit caps; the schema uses `TEXT`/`MEDIUMTEXT` to avoid silent truncation.
 2. Soft-delete retention and purge job schedule (proposed: 30 days, daily purge).
-3. Session lifetime (proposed: 14 days absolute) and whether "remember me" exists.
-4. Argon2id versus bcrypt as the committed hashing choice on Windows.
-5. Whether new server accounts receive demo data.
-6. Whether `statusActivityDate` is client-supplied (recommended, to preserve local dates) or server-derived from UTC.
 
-Everything else in this document is specific enough to implement without renegotiation.
+Resolved authentication/product choices:
+- Session lifetime: 30-minute idle timeout and 7-day absolute expiry; no remember-me option.
+- Password hashing: Argon2id only with the parameters in §3.1; no bcrypt fallback.
+- New accounts receive no demo records.
+- `statusActivityDate` is client-supplied and validated to preserve the user's local calendar date.
+
+Do not ask to re-confirm the resolved choices unless verified implementation evidence demonstrates a conflict.
 
 ### 10.2 Database foundation implemented in Stage 10C
 
@@ -833,7 +845,7 @@ Stages 3 and 4 are implemented at the foundation level only:
 - `GET /api/ready` performs that read-only check; it never migrates or writes. `GET /api/health` remains independent of the database.
 - `server/database/create-database.sql` is a deliberate, one-time administrator action. It only creates `launchboard`.
 - `npm run db:migrate` runs `server/database/migrations/*.sql` in filename order, records versions and checksums, skips verified migrations, and refuses checksum drift, a missing applied file, or any selected database other than `launchboard`.
-- The initial migration creates the tables in §4. No repository, authentication, opportunity endpoint, or frontend API client exists. Presence of these tables does not imply those features are available.
+- At the Stage 10C foundation checkpoint, the initial migration created the tables in §4; repository and authentication handler work followed in later stages. The current implementation status is tracked in `docs/implementation-roadmap.md`. Presence of these tables does not imply that all opportunity features or frontend API integration are available.
 
 MySQL/MariaDB DDL implicitly commits, so a migration is not transactionally atomic. A failed migration is never recorded; recovery requires inspecting the partial schema and re-running after fixing the cause. The runner never drops or rebuilds tables automatically.
 
@@ -845,14 +857,14 @@ MySQL/MariaDB DDL implicitly commits, so a migration is not transactionally atom
 
 - Session cookie: `HttpOnly`, `SameSite=Lax`, `Path=/`, `Secure` in production, no `Domain` attribute.
 - Only the SHA-256 hash of the session token is stored. A database leak does not yield usable sessions.
-- Rotate the session ID on login. Delete the row on logout.
+- Rotate the session ID on login. Revoke the current session row on logout.
 - Generic login errors; constant-time password comparison via the hashing library.
-- Rate-limit registration and login per IP and per email, and return `Retry-After` on `429`.
+- Rate-limit registration per IP and login per IP plus normalized email account identifier; return the safe `RATE_LIMITED` envelope and `Retry-After` on `429`.
 
 ### 11.2 CSRF and CORS
 
-- Require `X-CSRF-Token` matching the readable CSRF cookie on every mutating request.
-- Verify `Origin` (and `Referer` as a fallback) against `APP_ORIGIN` for mutating requests.
+- Require `X-CSRF-Token` matching the deterministic HMAC-derived token for the active pre-auth/authenticated session on every mutating request; compare in constant time. No readable CSRF cookie or server-stored CSRF hash.
+- Verify `Origin` against the configured exact-origin allowlist for mutating requests. Reject missing/null Origin; do not infer the trusted origin from Host headers.
 - CORS: exact allowlist only, `credentials: true`, never `*`. Prefer the Vite proxy so development is same-origin.
 - Reject unknown content types; do not accept form-encoded mutations.
 
@@ -861,22 +873,23 @@ MySQL/MariaDB DDL implicitly commits, so a migration is not transactionally atom
 - Validate every field server-side regardless of client validation. Never trust `user_id`, `version` or IDs from the body for authorization.
 - Prepared statements only; no string-concatenated SQL.
 - Parameterized `LIMIT`/`OFFSET` if pagination is added; never interpolate sort columns.
-- Never return SQL errors, stack traces, hashes, tokens or connection strings. Log them server-side with a request ID.
+- Never return SQL errors, stack traces, hashes, tokens or connection strings. Log unexpected server failures in sanitized form with a request ID; do not serialize raw driver errors, SQL parameters, request bodies, cookies, tokens, password values or hashes.
 - Set conservative body limits. The server foundation uses a single 6 MiB JSON transport limit (5 MiB backup + 1 MiB envelope/escaping) and caps shared array lengths. A later stage may apply a smaller limit to non-import routes; the import handler must still enforce the 5 MiB backup limit after parsing.
 - Escape nothing in JSON responses; the client renders text, and CSV formula neutralization remains a client export concern.
 
 ### 11.4 Database and operations
 
 - Dedicated database `launchboard`; two dedicated accounts with privileges on `launchboard.*` only. The runtime account is limited to data access; the migration account owns schema changes and migration tracking. Never root, never `healthbridge`, never `nova_home`.
+- Deleting an opportunity must delete its interviews first, then the opportunity, because `interviews → contacts` is `ON DELETE RESTRICT` while both cascade from the opportunity. A single opportunity delete fails when an interview references a contact (verified live on MariaDB 10.4.32).
 - `.env` is git-ignored; `.env.example` documents names with placeholder values.
 - Backups of the `launchboard` database are the operator's responsibility; the JSON export is a user-facing feature, not a database backup.
 - Migrations are forward-only and recorded in `schema_migrations`. No destructive migration runs automatically in production.
 - Health endpoints expose no schema or version detail publicly.
-- Log authentication failures, rate-limit hits, conflicts and 5xx with request IDs; never log passwords, tokens or full request bodies containing them.
+- Log authentication failures (401/403), rate-limit hits (429), conflicts (409/412/428) and 5xx failures with request IDs. Log only safe error codes and request IDs; never log passwords, tokens, cookies, raw SQL parameters, request bodies or raw driver-error objects.
 
 ### 11.5 Known limitations to state honestly
 
-- No email verification or password reset in v1.
+- Email verification and password recovery are implemented. Delivery requires the server-only SMTP settings documented in docs/auth-design.md.
 - No multi-device conflict merging; conflicts require reload.
 - No server-side Saved Views.
 - No audit log beyond per-opportunity activities and timestamps.
@@ -890,24 +903,69 @@ MySQL/MariaDB DDL implicitly commits, so a migration is not transactionally atom
 |---|---|---|
 | Opportunity text caps | Prevents unbounded rows and UI breakage; affects validation parity | 200 for title/company, 200 for compensation, 20,000 for description/notes, 2,048 for URL |
 | Purge retention | Balances accidental-loss recovery against storage growth | 30 days, daily job |
-| Session lifetime / sliding expiry | Security versus convenience | 14 days absolute, no sliding |
-| Argon2id vs bcrypt | Native build reliability on Windows versus modern default | Argon2id, bcrypt cost 12 fallback |
-| Demo data for new accounts | Affects first-run experience and test fixtures | No; demo data stays a frontend-only concept |
-| `statusActivityDate` source | Determines whether status history dates match the user's calendar | Client-supplied and validated |
 | Pagination for large collections | Current UI assumes a full collection in memory | No pagination in v1; revisit above ~5,000 records |
 | Saved Views server sync | Cross-device convenience versus scope | Local only |
 
-Resolved in Stage 10A: the shared-code layout is the npm workspace package `packages/domain` (`@launchboard/domain`), ESM compiled with NodeNext to `dist`, consumed by the frontend through re-export wrappers. See `packages/domain/README.md`. The package contains contracts and pure rules only; it does not implement the backend.
+Resolved in Stage 10A: the shared-code layout is the npm workspace package `packages/domain` (`@launchboard/domain`), ESM compiled with NodeNext to `dist`, consumed by the frontend through re-export wrappers. See `packages/domain/README.md`. The package contains contracts and pure rules only; it does not implement persistence or backend services.
 
-Stage 10B note: the `server/` workspace enforces the resolved limits and rules above but deliberately does **not** enforce the unresolved opportunity text caps (`title`, `company`, `compensation`, `description`, `notes`, opportunity `url`). Those requests remain bounded only by the global JSON transport limit until the decision above is approved. The same stage implements `GET /api/health` as liveness only; `/api/ready` remains deferred until database connectivity exists.
+Current status: opportunity text caps listed above remain a product-policy decision; the JSON request-size limit is the transport guard. Both /api/health (liveness) and /api/ready (read-only database readiness) are implemented. Readiness never runs migrations.
 
 ---
 
 ## 13. Final recommendation
 
-The design is **ready for backend foundation work** (Stages 1–3) once the seven Stage-4 decisions above are approved. The domain model, schema, ownership rules, concurrency model, transaction boundaries, API contract, and backup migration path are specified concretely enough to implement without redesign.
+The backend foundation, authentication handlers and Stage 6–9 opportunity APIs are implemented. Stage 10 frontend/API integration and the explicit browser migration flow are also implemented and have passed their recorded automated release checks. The localStorage mode remains the default; `VITE_DATA_MODE=api` opts into the authenticated server workspace. Do not restart completed implementation stages unless a reproducible defect requires it.
 
-Recommended order: extract shared domain rules first, then stand up the server and database foundation, then authentication, then the opportunity aggregate with optimistic concurrency. Do not begin frontend integration until the aggregate endpoints and conflict semantics are proven with tests.
+The application is deployed on Vercel with TiDB Cloud Serverless. Use docs/deployment-readiness.md for the current source-based deployment configuration and release checks. Do not follow historical Aiven setup notes from earlier project iterations.
 
-No backend code, SQL, dependency, database change, or frontend change has been made. The application remains localStorage-only, and all existing keys, backup formats and behaviors are unchanged.
+Keep the localStorage mode and recovery data intact. Preserve backup compatibility, transaction boundaries, ownership scoping, optimistic concurrency, and least-privilege database access. A mocked-database test does not prove that a cloud database is ready; follow the explicit live-verification procedure before changing production schema.
 
+
+
+
+---
+
+## 14. Email verification and password recovery
+
+This section records the current implemented account-action behavior and supersedes the earlier Stage 11 policy that deferred verification and recovery.
+
+### Account-action token storage
+
+Migration `003_email_verification_password_reset.sql` adds:
+- `users.email_verified_at DATETIME(3) NULL`.
+- `auth_action_tokens`: UUID id, user FK with cascade, purpose (`verify_email` or `reset_password`), unique SHA-256 token hash, creation/expiry timestamps and nullable consumed/revoked timestamps. Indexes support user+purpose and expiry lookups.
+
+Raw action tokens are 32 random bytes encoded as base64url. They are returned only to the mail adapter/caller and never stored. Verification links expire in 24 hours; password-reset links expire in one hour. Token lookups lock rows inside the consuming transaction, and conditional updates prevent concurrent double-use.
+
+### Environment and email delivery
+
+The server accepts an all-or-none optional configuration block:
+- `SMTP_USER`: dedicated Gmail/Google Mail address used for sending.
+- `SMTP_PASS`: 16-character Google app password (server-side secret only; spaces in Google's grouped display are normalized).
+- `APP_BASE_URL`: exact canonical app origin; HTTPS in production (development may use canonical HTTP localhost).
+
+Nodemailer delivers through `smtp.gmail.com` on port `465` with implicit TLS. The send operation is awaited before returning the API response; SMTP credentials and provider errors are never logged or returned. No mail credential may be placed in any `VITE_*` variable. Standard Gmail sending limits make this a low-volume starting point rather than a high-volume production mail service. Links are built from `APP_BASE_URL`, never from a request Host or forwarded-host header. One-time tokens are put in URL fragments so they are not sent in the initial HTTP request; the UI immediately strips them from browser history after capturing them.
+
+### API contract
+
+All account-action POST routes are `Cache-Control: no-store` and require the established exact-Origin, JSON, pre-authentication cookie and `X-CSRF-Token` protections.
+
+| Method and path | Behavior |
+|---|---|
+| `POST /api/auth/register` | Create an unverified account and 24-hour verification token transactionally. Return generic 202; no authenticated session is issued. |
+| `POST /api/auth/verify-email` | Consume a valid one-time verification token and mark the account verified. Return 200; no automatic login. |
+| `POST /api/auth/resend-verification` | Send a new link only to an unverified account. Return the same generic 202 for all account states. |
+| `POST /api/auth/password-reset/request` | Send a one-hour reset link only to a verified account. Return the same generic 202 for known and unknown addresses. |
+| `POST /api/auth/password-reset/confirm` | Consume a valid reset token, update the Argon2id password, revoke all sessions and invalidate other reset tokens in one transaction. Return 200; no automatic login. |
+
+Unknown and known email addresses do not produce different resend/reset-request response bodies. Mail delivery failure is reduced to a safe generic outcome; the user can retry a verification email. Login rejects unverified accounts with the same `401 INVALID_CREDENTIALS` response as wrong credentials. Session lookup also filters out unverified users, invalidating pre-migration sessions for those accounts.
+
+### Rate limits
+
+Verification resend has 3 requests per 15 minutes per IP plus a 6-per-hour HMAC-email quota. Password-reset requests have 5 per 15 minutes per IP plus the same HMAC-email quota. Reset confirmation has 5 per 15 minutes per IP. Verification consumption also has the resend IP throttle. Counters use the existing process-local limiter store and are not shared across instances.
+
+### Rollout implications and status
+
+The migration is additive but existing users are unverified by default. After a production migration, existing users must request a verification link before sign-in; their pre-existing sessions will no longer authorize requests. Communicate this before rollout.
+
+As of 2026-11-03, migration 003 is applied and live-verified on local XAMPP MariaDB `launchboard` (12 tables, 39 indexes, 11 foreign keys). The API/frontend tests, typechecks, builds and local SQL lifecycle smoke passed. Production Vercel/TiDB remains on the prior version. Production activation requires a dedicated Gmail address, its app password stored as a Vercel sensitive variable, canonical `APP_BASE_URL`, a separately reviewed TiDB migration and a deployment/live-email smoke run.

@@ -67,6 +67,7 @@ describe('database target guard', () => {
 describe('pool configuration', () => {
   it('uses utf8mb4, UTC string handling and bounded waiting', () => {
     const options = buildPoolOptions(validConfig);
+    expect(options).not.toHaveProperty('ssl');
     expect(options).toMatchObject({
       database: 'launchboard',
       charset: 'utf8mb4',
@@ -79,6 +80,36 @@ describe('pool configuration', () => {
       queueLimit: 20,
       connectTimeout: 10_000,
       waitForConnections: true,
+    });
+  });
+
+  it('enables CA and hostname verification when a database CA is configured', () => {
+    const sslCa = "-----BEGIN CERTIFICATE-----\nY2VydGlmaWNhdGUtcGFyc2VyLXRlc3Q=\n-----END CERTIFICATE-----";
+    const options = buildPoolOptions({ ...validConfig, sslCa });
+    expect(options.ssl).toEqual({
+      minVersion: 'TLSv1.2',
+      ca: sslCa,
+      rejectUnauthorized: true,
+      verifyIdentity: true,
+    });
+  });
+
+  it('uses a small bounded pool for serverless function instances', () => {
+    const options = buildPoolOptions({ ...validConfig, serverless: true });
+    expect(options).toMatchObject({
+      connectionLimit: 2,
+      maxIdle: 1,
+      idleTimeout: 60_000,
+      queueLimit: 20,
+    });
+  });
+
+  it('enables TLS 1.2+ and system CA verification for TiDB Serverless', () => {
+    const options = buildPoolOptions({ ...validConfig, ssl: true });
+    expect(options.ssl).toEqual({
+      minVersion: 'TLSv1.2',
+      rejectUnauthorized: true,
+      verifyIdentity: true,
     });
   });
 

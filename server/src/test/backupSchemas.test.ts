@@ -23,12 +23,15 @@ describe('backup envelope schema', () => {
     expect(backupEnvelopeSchema.safeParse(envelope).success).toBe(true);
   });
 
-  it('rejects wrong formats and unsupported schema versions', () => {
+  it('rejects wrong formats while allowing the service to identify unsupported integer versions', () => {
     expect(
       backupEnvelopeSchema.safeParse(backupEnvelope([], { format: 'other' })).success,
     ).toBe(false);
     expect(
       backupEnvelopeSchema.safeParse(backupEnvelope([], { schemaVersion: 2 })).success,
+    ).toBe(true);
+    expect(
+      backupEnvelopeSchema.safeParse(backupEnvelope([], { schemaVersion: '2' })).success,
     ).toBe(false);
   });
 
@@ -41,10 +44,13 @@ describe('backup envelope schema', () => {
     ).toBe(false);
   });
 
-  it('rejects a non-string exportedAt', () => {
+  it('treats malformed exportedAt as advisory metadata', () => {
     expect(
       backupEnvelopeSchema.safeParse(backupEnvelope([], { exportedAt: 123 })).success,
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      backupEnvelopeSchema.safeParse(backupEnvelope([], { exportedAt: null })).success,
+    ).toBe(true);
   });
 
   it('accepts opaque records so invalid records can be skipped and counted', () => {

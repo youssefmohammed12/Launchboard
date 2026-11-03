@@ -62,6 +62,7 @@ export function MaterialSection({
   const [editor, setEditor] = useState<Editor | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const editRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -75,6 +76,7 @@ export function MaterialSection({
   };
 
   const openAdd = (event: MouseEvent<HTMLButtonElement>) => {
+    if (busy) return;
     returnFocusRef.current = event.currentTarget;
     setPendingDeleteId(null);
     setSaveError(null);
@@ -82,6 +84,7 @@ export function MaterialSection({
   };
 
   const openEdit = (event: MouseEvent<HTMLButtonElement>, material: MaterialEntry) => {
+    if (busy) return;
     returnFocusRef.current = event.currentTarget;
     setPendingDeleteId(null);
     setSaveError(null);
@@ -100,35 +103,70 @@ export function MaterialSection({
   };
 
   const saveEditor = (draft: MaterialDraft) => {
-    if (!editor) return;
-    const saved =
-      editor.kind === 'add'
+    if (!editor || busy) return;
+    const finish = (saved: boolean | void) => {
+      if (saved === false) {
+        setSaveError(SAVE_FAILURE_MESSAGE);
+        return;
+      }
+      setSaveError(null);
+      closeEditor();
+    };
+    try {
+      const result = editor.kind === 'add'
         ? onAddMaterial(draft)
         : onUpdateMaterial(editor.material.id, draft);
-    if (saved === false) {
-      // Keep the editor mounted so the entered values survive for a retry.
+      if (result instanceof Promise) {
+        setBusy(true);
+        void result.then(finish).catch(() => setSaveError(SAVE_FAILURE_MESSAGE)).finally(() => setBusy(false));
+      } else {
+        finish(result);
+      }
+    } catch {
       setSaveError(SAVE_FAILURE_MESSAGE);
-      return;
     }
-    setSaveError(null);
-    closeEditor();
   };
 
   const confirmDelete = (material: MaterialEntry) => {
-    const saved = onRemoveMaterial(material.id);
-    if (saved === false) {
-      // Keep the confirmation visible so the user can retry or cancel.
+    if (busy) return;
+    const finish = (saved: boolean | void) => {
+      if (saved === false) {
+        setSaveError(SAVE_FAILURE_MESSAGE);
+        return;
+      }
+      setSaveError(null);
+      setPendingDeleteId(null);
+      focusAfterUpdate(addButtonRef.current);
+    };
+    try {
+      const result = onRemoveMaterial(material.id);
+      if (result instanceof Promise) {
+        setBusy(true);
+        void result.then(finish).catch(() => setSaveError(SAVE_FAILURE_MESSAGE)).finally(() => setBusy(false));
+      } else {
+        finish(result);
+      }
+    } catch {
       setSaveError(SAVE_FAILURE_MESSAGE);
-      return;
     }
-    setSaveError(null);
-    setPendingDeleteId(null);
-    focusAfterUpdate(addButtonRef.current);
   };
 
   const changeStatus = (material: MaterialEntry, status: MaterialStatus) => {
-    const saved = onMaterialStatusChange(material.id, status);
-    setSaveError(saved === false ? SAVE_FAILURE_MESSAGE : null);
+    if (busy) return;
+    const finish = (saved: boolean | void) => {
+      setSaveError(saved === false ? SAVE_FAILURE_MESSAGE : null);
+    };
+    try {
+      const result = onMaterialStatusChange(material.id, status);
+      if (result instanceof Promise) {
+        setBusy(true);
+        void result.then(finish).catch(() => setSaveError(SAVE_FAILURE_MESSAGE)).finally(() => setBusy(false));
+      } else {
+        finish(result);
+      }
+    } catch {
+      setSaveError(SAVE_FAILURE_MESSAGE);
+    }
   };
 
   return (
@@ -153,7 +191,7 @@ export function MaterialSection({
             type="button"
             className={`${smallPrimaryButtonClass} disabled:cursor-not-allowed disabled:opacity-60`}
             onClick={openAdd}
-            disabled={atLimit}
+            disabled={atLimit || busy}
             aria-describedby={atLimit ? 'material-limit' : undefined}
           >
             <Plus size={14} aria-hidden /> Add material
@@ -184,6 +222,7 @@ export function MaterialSection({
             initial={editor.kind === 'edit' ? editor.material : undefined}
             onSave={saveEditor}
             onCancel={closeEditor}
+            busy={busy}
           />
         </div>
       )}
@@ -258,6 +297,7 @@ export function MaterialSection({
                       autoFocus
                       className={deleteConfirmButtonClass}
                       aria-label={`Delete material: ${material.label}`}
+                      disabled={busy}
                       onClick={() => confirmDelete(material)}
                     >
                       Delete material
@@ -266,6 +306,7 @@ export function MaterialSection({
                       type="button"
                       className={smallSecondaryButtonClass}
                       aria-label={`Keep material: ${material.label}`}
+                      disabled={busy}
                       onClick={() => {
                         setPendingDeleteId(null);
                         setSaveError(null);
@@ -285,6 +326,7 @@ export function MaterialSection({
                       }}
                       className={smallSecondaryButtonClass}
                       aria-label={`Edit material ${material.label}`}
+                      disabled={busy}
                       onClick={(event) => openEdit(event, material)}
                     >
                       <Pencil size={13} aria-hidden /> Edit
@@ -300,6 +342,7 @@ export function MaterialSection({
                       className={statusSelectClass}
                       aria-label={`Status for ${material.label}`}
                       value={material.status}
+                      disabled={busy}
                       onChange={(event) => {
                         const status = MATERIAL_STATUSES.find(
                           (value) => value === event.target.value,
@@ -315,6 +358,7 @@ export function MaterialSection({
                       type="button"
                       className={`${removeButtonClass} ml-auto`}
                       aria-label={`Delete material ${material.label}`}
+                      disabled={busy}
                       onClick={() => setPendingDeleteId(material.id)}
                     >
                       <Trash2 size={14} aria-hidden />

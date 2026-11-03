@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import type { Opportunity } from '../types/opportunity';
 import {
   MAX_BACKUP_BYTES,
-  parseBackupJson,
+  parseImportFile,
   planImport,
   type BackupParseResult,
   type ImportMode,
@@ -120,12 +120,12 @@ export function RestoreBackupDialog({
     try {
       const text = await readFileText(file);
       if (!mountedRef.current || sequence !== readSequence.current) return;
-      const result = parseBackupJson(text);
+      const result = parseImportFile(text, file.name);
       if (!result.ok) {
         setReadError(result.error.message);
         return;
       }
-      setParseResult(result);
+      setParseResult({ ok: true, backup: result.backup });
       setStep('preview');
     } catch {
       if (!mountedRef.current || sequence !== readSequence.current) return;
@@ -170,7 +170,7 @@ export function RestoreBackupDialog({
 
   return (
     <Modal
-      title="Restore JSON backup"
+      title="Import opportunities"
       onClose={onClose}
       initialFocusId="restore-file"
       opener={opener}
@@ -179,19 +179,19 @@ export function RestoreBackupDialog({
       <div className="px-s5 pt-s4 pb-s5">
         <div className={fieldClass}>
           <label htmlFor="restore-file" className={labelClass}>
-            JSON backup file
+            CSV or JSON file
           </label>
           <input
             id="restore-file"
             type="file"
-            accept=".json,application/json"
+            accept=".csv,text/csv,.json,application/json"
             onChange={handleFileChange}
             disabled={isReading}
             aria-describedby={readError ? 'restore-file-help restore-file-error' : 'restore-file-help'}
             className="w-full cursor-pointer rounded-control border border-border bg-surface px-s3 py-[9px] text-inherit [font:inherit] file:mr-s3 file:cursor-pointer file:rounded-control file:border-0 file:bg-accent-soft file:px-s3 file:py-[6px] file:font-medium file:text-accent-dark"
           />
           <p id="restore-file-help" className={helpClass}>
-            Choose a Launchboard JSON backup (schema version 1). Maximum file size: {MAX_BACKUP_MB} MB.
+            Choose a CSV spreadsheet or a Launchboard JSON backup (schema version 1). CSV imports contain tabular fields only; use JSON for a full-fidelity restore. Maximum file size: {MAX_BACKUP_MB} MB.
           </p>
           {fileName && (
             <p className="m-0 text-[0.82rem] text-muted [overflow-wrap:anywhere]">
