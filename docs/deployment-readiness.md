@@ -2,15 +2,15 @@
 
 ## Current production deployment
 
-Last checked: **3 November 2026**.
+Last checked: **4 November 2026**.
 
 - Application: [https://launchboard-drab.vercel.app](https://launchboard-drab.vercel.app)
 - Hosting: Vercel Hobby, Node.js 24.x, Frankfurt region (`fra1`).
 - Database: TiDB Cloud Serverless, database `launchboard`.
-- Latest redesign deployment: `dpl_AvAj3qGkrSeHC8kx7Fv5sXgj5ZR7` (READY).
+- Latest production deployment: `dpl_Fed9L1WuwYxQ1asTkCC5DFNLiN3K` (READY; includes the new SVG favicon).
 - The UI redesign, CSV import, API-mode integration, and current authentication presentation are included in the deployed application.
 
-The latest release smoke checked the canonical homepage and generated JS/CSS assets, the redesign markers, `/api/health`, and `/api/ready`. The readiness endpoint returned `db=ok`. The redesign's focused UI tests and production build passed before release. The user separately manually verified the authentication flows; that manual test was not repeated as part of the redesign release.
+The 4 November favicon release used the existing prebuilt deployment workflow and reused the API function bundle unchanged. The frontend production build passed with 1,633 modules. Live smoke verified the canonical homepage, `/favicon.svg` (HTTP 200, `image/svg+xml`, SHA-256 matching the local SVG), generated JS/CSS assets, redesign markers, `/api/health`, and `/api/ready`; readiness returned `db=ok`. No database migrations, environment-variable changes, opportunity-record changes, authentication tests, or CRUD tests were performed.
 
 ## Architecture
 

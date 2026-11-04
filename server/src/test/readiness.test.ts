@@ -13,7 +13,7 @@ const notReadyProbe: ReadinessProbe = {
 
 const throwingProbe: ReadinessProbe = {
   check: async () => {
-    throw new Error('mysql://launchboard_app:secret@db.local/launchboard');
+    throw new Error('mysql://launchboard_app:test-only-placeholder@db.local/launchboard');
   },
 };
 

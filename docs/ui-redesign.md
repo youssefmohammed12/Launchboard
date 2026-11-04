@@ -66,3 +66,10 @@ Result: TypeScript check and Vite production build passed with 1,633 modules.
 - No account was created, and no existing opportunity data was changed.
 - API bundle, database, Vercel project settings and environment variables were left unchanged. Deployment used prebuilt files; no Git connection, commit or push was created.
 - Final generated assets: `assets/index-DGfkRjv9.js` (384,616 bytes) and `assets/index-CfJqFXoU.css` (48,723 bytes). `deployment/release-ui-smoke.mjs` checks the production routes and the emitted design markers.
+
+
+## Browser branding follow-up (2026-11-04)
+
+- Added `public/favicon.svg` as the browser tab icon: a simplified, clearly recognizable white rocket with cockpit, fins and teal exhaust on a dark blue-green rounded-square background. The SVG is deliberately lightweight and stays crisp at small tab-icon sizes.
+- `index.html` references the SVG favicon and sets the browser theme color to the existing dark navigation color (`#102735`).
+- Deployed to Vercel production on 2026-11-04 as `dpl_Fed9L1WuwYxQ1asTkCC5DFNLiN3K` (READY). The live favicon endpoint returned HTTP 200 with `image/svg+xml`, and its SHA-256 matched the local SVG.

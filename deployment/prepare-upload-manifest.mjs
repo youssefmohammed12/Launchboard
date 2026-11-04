@@ -5,6 +5,7 @@ const staticFiles = [
   { file: 'package.json', path: 'deployment/package.json' },
   { file: 'vercel.json', path: 'deployment/vercel.json' },
   { file: 'index.html', path: 'deployment/index.html' },
+  { file: 'favicon.svg', path: 'public/favicon.svg' },
 ];
 
 const assetNames = (await readdir('deployment/assets', { withFileTypes: true }))

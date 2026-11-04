@@ -4,6 +4,23 @@
 
 [**Open the live app**](https://launchboard-drab.vercel.app)
 
+## Preview
+
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" alt="Launchboard dashboard with opportunity summary cards, upcoming deadlines and recent opportunities" width="100%">
+  <br><em>Dashboard — a quick view of the active pipeline and the next seven days.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/opportunities.png" alt="Launchboard opportunities page with list view, status filters and sample opportunities" width="100%">
+  <br><em>Opportunities — search, filter and manage the application pipeline.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/opportunity-details.png" alt="Launchboard opportunity details showing a contact, linked interview, resume metadata and activity timeline" width="70%">
+  <br><em>Opportunity details — contacts, linked interview rounds, application-material metadata and activity history.</em>
+</p>
+
 > Launchboard is an opportunity tracker, not a freelancing marketplace. It helps you manage opportunities you find elsewhere; it does not publish jobs or connect clients with freelancers.
 
 ## What you can do
@@ -62,6 +79,20 @@ The modes do not synchronize automatically. Moving local records to an account i
 
 - **CSV** is for tabular transfer. It includes the supported opportunity columns and activity data, but does not preserve archive state, interviews, contacts, or materials.
 - **JSON** is the full Launchboard backup/restore format. Use JSON when you need to preserve the complete workspace.
+
+## Try the built-in demo
+
+A fresh browser-only local workspace automatically starts with six synthetic opportunities. They are marked **Demo** so they are easy to distinguish from records you add yourself. Existing browser data is not replaced by the sample set.
+
+To explore the sample workflow, start the frontend locally and open it in a fresh browser profile or private window:
+
+1. Open the Dashboard to review the opportunity totals and upcoming deadlines.
+2. Go to **Opportunities** and open **Junior React Developer** at **Brightpath**.
+3. Add a contact, then create an interview round and link it to that contact.
+4. Add application-material metadata for a resume and record an update in the activity timeline.
+5. Explore Calendar, Deadlines and Reports to see the same opportunities from different views.
+
+The screenshots above use the same built-in sample set. The nested contact, interview, material and activity shown in the details screenshot were added in an isolated browser session for the capture; they are not preloaded sample records. The hosted authenticated workspace is separate from this local browser demo.
 
 ## Getting started
 
@@ -140,7 +171,8 @@ npm run test:focus
 .
 ├── api/                  # Vercel catch-all API entry point
 ├── deployment/           # Release and prebuilt-deployment helper scripts
-├── docs/                 # Architecture, API, auth, deployment, and UI notes
+├── docs/                 # Architecture, API, auth, deployment, UI notes, and screenshots
+│   └── screenshots/      # Genuine local-app captures used in this README
 ├── packages/
 │   └── domain/           # Shared, environment-independent domain package
 ├── server/
