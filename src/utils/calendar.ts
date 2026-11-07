@@ -5,6 +5,7 @@ import {
   type InterviewStatus,
   type Opportunity,
   type OpportunityStatus,
+  type Priority,
 } from '../types/opportunity';
 import { isArchived } from './archive';
 import {
@@ -15,7 +16,7 @@ import {
 } from './dates';
 import { isValidInterviewTime } from './interviews';
 
-export const CALENDAR_EVENT_TYPES = ['deadline', 'follow-up', 'interview'] as const;
+export const CALENDAR_EVENT_TYPES = ['deadline', 'follow-up', 'task', 'interview'] as const;
 export type CalendarEventType = (typeof CALENDAR_EVENT_TYPES)[number];
 
 export const CALENDAR_EVENT_FILTERS = ['all', ...CALENDAR_EVENT_TYPES] as const;
@@ -53,6 +54,14 @@ export interface FollowUpCalendarEvent extends CalendarEventBase {
   time: '';
 }
 
+export interface TaskCalendarEvent extends CalendarEventBase {
+  type: 'task';
+  time: '';
+  taskId: string;
+  taskTitle: string;
+  taskPriority: Priority;
+}
+
 export interface InterviewCalendarEvent extends CalendarEventBase {
   type: 'interview';
   interviewId: string;
@@ -63,6 +72,7 @@ export interface InterviewCalendarEvent extends CalendarEventBase {
 export type CalendarEvent =
   | DeadlineCalendarEvent
   | FollowUpCalendarEvent
+  | TaskCalendarEvent
   | InterviewCalendarEvent;
 
 /** A follow-up is a planned action and stays eligible regardless of opportunity status. */
@@ -79,13 +89,14 @@ function compareText(a: string, b: string): number {
 const TYPE_ORDER: Record<CalendarEventType, number> = {
   deadline: 0,
   'follow-up': 1,
-  interview: 2,
+  task: 2,
+  interview: 3,
 };
 
 /**
  * Chronological by local date. On the same date, timed interviews come first in
- * local-time order; all untimed events follow in deadline, follow-up, interview
- * order. Remaining ties use stable text fields and the derived ID.
+ * local-time order; all untimed events follow in deadline, follow-up, task,
+ * interview order. Remaining ties use stable text fields and the derived ID.
  */
 export function compareCalendarEvents(a: CalendarEvent, b: CalendarEvent): number {
   const byDate = compareText(a.date, b.date);
@@ -164,6 +175,28 @@ export function deriveCalendarEvents(items: readonly Opportunity[]): CalendarEve
         date: item.followUpDate,
         time: '',
         label: 'Follow-up',
+      });
+    }
+
+    const tasks = Array.isArray(item.tasks) ? item.tasks : [];
+    for (const task of tasks) {
+      if (!task || task.completed || typeof task.id !== 'string' || !task.id) continue;
+      if (typeof task.dueDate !== 'string' || !isValidISODate(task.dueDate)) continue;
+      if (typeof task.title !== 'string' || !task.title.trim()) continue;
+
+      add({
+        id: `task:${item.id}:${task.id}`,
+        type: 'task',
+        opportunityId: item.id,
+        opportunityTitle: title,
+        opportunityCompany: company,
+        opportunityStatus: item.status,
+        date: task.dueDate,
+        time: '',
+        label: task.title.trim(),
+        taskId: task.id,
+        taskTitle: task.title.trim(),
+        taskPriority: task.priority,
       });
     }
 
@@ -316,6 +349,9 @@ export function calendarEventTiming(
     if (event.type === 'follow-up') {
       return { state: 'overdue', text: `Follow-up overdue by ${daysText}` };
     }
+    if (event.type === 'task') {
+      return { state: 'overdue', text: `Task overdue by ${daysText}` };
+    }
     return {
       state: 'overdue',
       text: `Interview date passed ${daysText} ago; still Scheduled`,
@@ -325,6 +361,7 @@ export function calendarEventTiming(
   if (days === 0) {
     if (event.type === 'deadline') return { state: 'today', text: 'Due today' };
     if (event.type === 'follow-up') return { state: 'today', text: 'Follow-up due today' };
+    if (event.type === 'task') return { state: 'today', text: 'Task due today' };
     return { state: 'today', text: 'Interview scheduled today' };
   }
 
@@ -332,12 +369,14 @@ export function calendarEventTiming(
   if (event.type === 'follow-up') {
     return { state: 'upcoming', text: `Follow-up in ${daysText}` };
   }
+  if (event.type === 'task') return { state: 'upcoming', text: `Task due in ${daysText}` };
   return { state: 'upcoming', text: `Interview in ${daysText}` };
 }
 
 export function eventTypeLabel(type: CalendarEventType): string {
   if (type === 'deadline') return 'Deadline';
   if (type === 'follow-up') return 'Follow-up';
+  if (type === 'task') return 'Task';
   return 'Interview';
 }
 

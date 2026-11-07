@@ -33,6 +33,8 @@ function parseOk(text: string): ParsedBackup {
 function envelope(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     ...JSON.parse(createJsonBackup([])),
+    // Most existing envelope fixtures model the legacy v1 import contract.
+    schemaVersion: 1,
     ...overrides,
   };
 }
@@ -67,6 +69,63 @@ describe('parseBackupJson', () => {
     expect(result.backup.exportedAt).toBeTruthy();
   });
 
+  it('imports v1 backups with empty tasks, even when a non-v1 task field is present', () => {
+    const legacy = makeOpportunity({ id: 'legacy-v1' }) as unknown as Record<string, unknown>;
+    legacy.tasks = [{
+      id: 'unversioned-task',
+      title: 'Ignore this legacy field',
+      notes: '',
+      priority: 'High',
+      dueDate: '',
+      completed: false,
+      completedOn: '',
+    }];
+    const result = parseBackupJson(JSON.stringify(envelope({ opportunities: [legacy] })));
+
+    expect(result).toMatchObject({ ok: true });
+    if (!result.ok) return;
+    expect(result.backup.records[0]?.tasks).toEqual([]);
+    expect(result.backup.repairedRecords).toBe(1);
+  });
+
+  it('preserves tasks through a version-2 JSON backup round-trip', () => {
+    const tasks = [
+      {
+        id: 'task-open',
+        title: 'Send recruiter follow-up',
+        notes: 'Mention the portfolio update',
+        priority: 'High' as const,
+        dueDate: '2026-11-08',
+        completed: false,
+        completedOn: '',
+      },
+      {
+        id: 'task-complete',
+        title: 'Submit assessment',
+        notes: '',
+        priority: 'Medium' as const,
+        dueDate: '',
+        completed: true,
+        completedOn: '2026-11-06',
+      },
+      {
+        id: 'task-unscheduled',
+        title: 'Research the engineering team',
+        notes: '',
+        priority: 'Low' as const,
+        dueDate: '',
+        completed: false,
+        completedOn: '',
+      },
+    ];
+    const opportunity = makeOpportunity({ id: 'v2-with-tasks', tasks });
+    const parsed = parseOk(createJsonBackup([opportunity]));
+
+    expect(parsed.records).toEqual([opportunity]);
+    expect(parsed.records[0]?.tasks).toEqual(tasks);
+    expect(parsed.repairedRecords).toBe(0);
+  });
+
   it('preserves valid archive metadata and treats legacy or malformed records as active', () => {
     const archivedAt = '2026-03-04T09:30:00.000Z';
     const archived = makeOpportunity({ id: 'archived', status: 'Applied', archivedAt });
@@ -74,6 +133,7 @@ describe('parseBackupJson', () => {
     const result = parseBackupJson(
       JSON.stringify(
         envelope({
+          schemaVersion: 2,
           opportunities: [
             archived,
             active,
@@ -284,13 +344,14 @@ describe('parseBackupJson', () => {
   });
 
   it('rejects unsupported schema versions', () => {
-    const result = parseBackupJson(JSON.stringify(envelope({ schemaVersion: 2 })));
+    const result = parseBackupJson(JSON.stringify(envelope({ schemaVersion: 3 })));
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.code).toBe('unsupported-schema');
-    expect(result.error.message).toContain('2');
+    expect(result.error.message).toContain('3');
     expect(result.error.message).toContain('1');
+    expect(result.error.message).toContain('2');
   });
 
   it('rejects excessive record counts before normalizing them', () => {

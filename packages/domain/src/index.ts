@@ -5,3 +5,4 @@ export * from './tags.js';
 export * from './validation.js';
 export * from './backup.js';
 export * from './backupNormalization.js';
+export * from './tasks.js';

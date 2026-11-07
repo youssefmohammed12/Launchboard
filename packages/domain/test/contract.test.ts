@@ -5,6 +5,7 @@ import {
   ACTIVITY_TYPES,
   BACKUP_FORMAT,
   BACKUP_SCHEMA_VERSION,
+  BACKUP_SUPPORTED_SCHEMA_VERSIONS,
   INTERVIEW_MODES,
   INTERVIEW_OUTCOMES,
   INTERVIEW_STATUSES,
@@ -107,9 +108,10 @@ describe('field validation', () => {
 });
 
 describe('backup contract', () => {
-  it('keeps the version-1 envelope identity', () => {
+  it('exports v2 while retaining explicit v1 import compatibility', () => {
     expect(BACKUP_FORMAT).toBe('launchboard-backup');
-    expect(BACKUP_SCHEMA_VERSION).toBe(1);
+    expect(BACKUP_SCHEMA_VERSION).toBe(2);
+    expect(BACKUP_SUPPORTED_SCHEMA_VERSIONS).toEqual([1, 2]);
   });
 });
 

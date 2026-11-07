@@ -78,6 +78,21 @@ describe('Opportunities selection', () => {
     expect(opportunityCell).toContainElement(checkbox);
   });
 
+  it('makes the Select all text a clickable label for the master checkbox', () => {
+    setup();
+
+    const master = masterCheckbox();
+    const selectAllText = screen.getByText('Select all');
+    const label = selectAllText.closest('label');
+
+    expect(label).toContainElement(master);
+    fireEvent.click(selectAllText);
+    expect(master).toBeChecked();
+    expect(rowCheckbox('Alpha Role')).toBeChecked();
+    expect(rowCheckbox('Beta Role')).toBeChecked();
+    expect(rowCheckbox('Gamma Role')).toBeChecked();
+  });
+
   it('selects individual rows by stable ID and reports the count', () => {
     const { props } = setup();
 

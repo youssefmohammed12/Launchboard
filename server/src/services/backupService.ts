@@ -1,6 +1,7 @@
 import {
   BACKUP_FORMAT,
   BACKUP_SCHEMA_VERSION,
+  BACKUP_SUPPORTED_SCHEMA_VERSIONS,
   normalizeBackupOpportunityRecord,
   type LaunchboardBackup,
   type Opportunity,
@@ -104,7 +105,7 @@ function failureReason(code: string): string {
   };
   return reasons[code] ?? 'Record could not be normalized.';
 }
-function planBackupRecords(rawRecords: readonly unknown[]): ImportRecordPlan {
+function planBackupRecords(rawRecords: readonly unknown[], schemaVersion: number): ImportRecordPlan {
   const records: Opportunity[] = [];
   const sourceIndices: number[] = [];
   const skipped: BackupSkip[] = [];
@@ -114,7 +115,7 @@ function planBackupRecords(rawRecords: readonly unknown[]): ImportRecordPlan {
   let duplicateRecords = 0;
 
   rawRecords.forEach((raw, index) => {
-    const normalized = normalizeBackupOpportunityRecord(raw);
+    const normalized = normalizeBackupOpportunityRecord(raw, schemaVersion);
     if (!normalized.opportunity) {
       invalidRecords += 1;
       skipped.push({
@@ -221,6 +222,7 @@ async function deleteOwnedOpportunities(connection: PoolConnection, userId: stri
   );
   // Interviews restrict contact deletion until references are removed.
   await childDelete('interviews');
+  await childDelete('tasks');
   await childDelete('activities');
   await childDelete('materials');
   await childDelete('contacts');
@@ -288,6 +290,13 @@ async function insertChildren(
       [opportunityId, activity.id, position, activity.type, activity.date, activity.note],
     );
   }
+  for (const [position, task] of opportunity.tasks.entries()) {
+    await connection.execute(
+      'INSERT INTO tasks (opportunity_id, public_id, `position`, title, notes, priority, due_date, completed, completed_on) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [opportunityId, task.id, position, task.title, task.notes, task.priority,
+        task.dueDate || null, task.completed ? 1 : 0, task.completedOn || null],
+    );
+  }
 }
 function buildImportResult(
   mode: 'merge' | 'replace',
@@ -329,11 +338,11 @@ export async function importOpportunities(
   if (input.backup.format !== BACKUP_FORMAT) {
     throw invalidBackup('invalid-envelope', 'This is not a valid Launchboard backup.');
   }
-  if (input.backup.schemaVersion !== BACKUP_SCHEMA_VERSION) {
+  if (!(BACKUP_SUPPORTED_SCHEMA_VERSIONS as readonly number[]).includes(input.backup.schemaVersion)) {
     throw invalidBackup('unsupported-schema', 'This backup uses an unsupported schema version.');
   }
 
-  const recordPlan = planBackupRecords(input.backup.opportunities);
+  const recordPlan = planBackupRecords(input.backup.opportunities, input.backup.schemaVersion);
   const dryRun = input.dryRun === true;
 
   return withTransaction(pool, async (connection) => {

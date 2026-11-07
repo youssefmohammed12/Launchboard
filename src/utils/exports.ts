@@ -79,7 +79,7 @@ export function createJsonBackup(items: Opportunity[]): string {
     format: BACKUP_FORMAT,
     schemaVersion: BACKUP_SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
-    opportunities: items,
+    opportunities: items.map((item) => ({ ...item, tasks: item.tasks ?? [] })),
   };
   return JSON.stringify(backup, null, 2);
 }
@@ -126,7 +126,7 @@ export function downloadJsonBackup(items: Opportunity[]): void {
     format: BACKUP_FORMAT,
     schemaVersion: BACKUP_SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
-    opportunities: items,
+    opportunities: items.map((item) => ({ ...item, tasks: item.tasks ?? [] })),
   };
   downloadJsonBackupEnvelope(backup);
 }

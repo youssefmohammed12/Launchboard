@@ -70,7 +70,7 @@ describe('opportunity backup API — Stage 9', () => {
   });
   afterEach(() => vi.unstubAllEnvs());
 
-  it('exports a version-1 envelope without server metadata', async () => {
+  it('exports a version-2 envelope with tasks and without server metadata', async () => {
     setHandler((sql) => {
       if (sql.includes('SELECT opportunity_revision FROM users')) return [[{ opportunity_revision: 7 }], []];
       if (sql.includes('SELECT o.*')) return [[{
@@ -100,6 +100,11 @@ describe('opportunity backup API — Stage 9', () => {
         opportunity_id: 41, public_id: 'material-1', label: 'Resume',
         kind: 'Resume', url: '', version: 'v1', status: 'Ready', notes: '',
       }], []];
+      if (sql.includes('FROM tasks')) return [[{
+        opportunity_id: 41, public_id: 'task-exported', title: 'Prepare for interview',
+        notes: 'Review the role', priority: 'High', due_date: '2026-11-08',
+        completed: 0, completed_on: null, position: 0,
+      }], []];
       return [[], []];
     });
     await withTestServer(app(), async (baseUrl) => {
@@ -108,13 +113,22 @@ describe('opportunity backup API — Stage 9', () => {
       expect(response.status).toBe(200);
       expect(response.headers.get('content-disposition')).toContain('attachment');
       expect(body).toMatchObject({
-        format: 'launchboard-backup', schemaVersion: 1,
+        format: 'launchboard-backup', schemaVersion: 2,
         opportunities: [{
           id: 'opportunity-1', archivedAt: '2026-10-31T12:30:00.000Z', isDemo: true,
           tags: ['Remote'], activities: [{ id: 'activity-1', date: '2026-10-01' }],
           contacts: [{ id: 'contact-1', name: 'Jordan Lee' }],
           interviews: [{ id: 'interview-1', contactId: 'contact-1', time: '09:30' }],
           materials: [{ id: 'material-1', version: 'v1' }],
+          tasks: [{
+            id: 'task-exported',
+            title: 'Prepare for interview',
+            notes: 'Review the role',
+            priority: 'High',
+            dueDate: '2026-11-08',
+            completed: false,
+            completedOn: '',
+          }],
         }],
       });
       expect(body.exportedAt).toMatch(/Z$/);
@@ -177,8 +191,21 @@ describe('opportunity backup API — Stage 9', () => {
       return [{ affectedRows: 1 }, []];
     });
     await withTestServer(app(), async (baseUrl) => {
+      const task = {
+        id: 'task-imported',
+        title: 'Send recruiter follow-up',
+        notes: 'Include portfolio link',
+        priority: 'High',
+        dueDate: '2026-11-08',
+        completed: false,
+        completedOn: '',
+      };
       const response = await request(baseUrl, 'import', {
-        mode: 'merge', backup: backupEnvelope([{ ...validOpportunity, id: 'imported-1' }]),
+        mode: 'merge',
+        backup: backupEnvelope(
+          [{ ...validOpportunity, id: 'imported-1', tasks: [task] }],
+          { schemaVersion: 2 },
+        ),
       });
       const body = await response.json() as any;
       const calls = connection.execute.mock.calls;
@@ -197,9 +224,14 @@ describe('opportunity backup API — Stage 9', () => {
       ]);
       expect(sql.findIndex((statement) => statement.includes('INSERT INTO contacts')))
         .toBeLessThan(sql.findIndex((statement) => statement.includes('INSERT INTO interviews')));
-      for (const table of ['opportunity_tags', 'contacts', 'interviews', 'materials', 'activities']) {
+      for (const table of ['opportunity_tags', 'contacts', 'interviews', 'materials', 'activities', 'tasks']) {
         expect(sql.some((statement) => statement.includes('INSERT INTO ' + table))).toBe(true);
       }
+      const taskInsert = calls.find(([statement]) => String(statement).includes('INSERT INTO tasks'));
+      expect(taskInsert?.[1]).toEqual([
+        90, 'task-imported', 0, 'Send recruiter follow-up',
+        'Include portfolio link', 'High', '2026-11-08', 0, null,
+      ]);
       expect(connection.commit).toHaveBeenCalledOnce();
       expect(connection.rollback).not.toHaveBeenCalled();
     });
@@ -375,7 +407,7 @@ describe('opportunity backup API — Stage 9', () => {
       expect(response.status).toBe(200);
       expect(body).toMatchObject({ mode: 'replace', revision: 10, replaced: 1, added: 1, finalCount: 1 });
       const orderedDeletes = [
-        'DELETE FROM interviews', 'DELETE FROM activities', 'DELETE FROM materials',
+        'DELETE FROM interviews', 'DELETE FROM tasks', 'DELETE FROM activities', 'DELETE FROM materials',
         'DELETE FROM contacts', 'DELETE FROM opportunity_tags',
         'DELETE FROM opportunities', 'DELETE FROM opportunity_deletions',
       ].map((fragment) => sql.findIndex((statement) => statement.includes(fragment)));
@@ -431,7 +463,7 @@ describe('opportunity backup API — Stage 9', () => {
   it('reports unsupported schema and malformed envelopes as INVALID_BACKUP', async () => {
     await withTestServer(app(), async (baseUrl) => {
       const unsupported = await request(baseUrl, 'import', {
-        mode: 'merge', backup: backupEnvelope([], { schemaVersion: 2 }),
+        mode: 'merge', backup: backupEnvelope([], { schemaVersion: 3 }),
       });
       const unsupportedBody = await unsupported.json() as any;
       expect(unsupported.status).toBe(422);

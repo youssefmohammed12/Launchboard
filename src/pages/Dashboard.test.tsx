@@ -22,16 +22,20 @@ function sectionByHeading(name: string | RegExp): HTMLElement {
 function renderDashboard(items: Opportunity[]) {
   const onAdd = vi.fn();
   const onOpen = vi.fn();
+  const onOpenTask = vi.fn();
+  const onOpenActionCenter = vi.fn();
   const onOpenCalendar = vi.fn();
   render(
     <Dashboard
       items={items}
       onAdd={onAdd}
       onOpen={onOpen}
+      onOpenTask={onOpenTask}
+      onOpenActionCenter={onOpenActionCenter}
       onOpenCalendar={onOpenCalendar}
     />,
   );
-  return { onAdd, onOpen, onOpenCalendar };
+  return { onAdd, onOpen, onOpenTask, onOpenActionCenter, onOpenCalendar };
 }
 
 function upcomingItems(): HTMLElement[] {
@@ -268,5 +272,124 @@ describe('Dashboard Next 7 Days', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Add Opportunity' }));
     expect(onAdd).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Dashboard Today's Focus", () => {
+  it('shows only overdue and due-today open tasks and keeps them out of Next 7 Days', () => {
+    const active = makeOpportunity({
+      id: 'active',
+      title: 'Frontend Intern',
+      tasks: [
+        {
+          id: 'late',
+          title: 'Send a recruiter follow-up',
+          notes: '',
+          priority: 'High',
+          dueDate: '2026-01-14',
+          completed: false,
+          completedOn: '',
+        },
+        {
+          id: 'today',
+          title: 'Tailor my CV',
+          notes: '',
+          priority: 'Medium',
+          dueDate: TODAY,
+          completed: false,
+          completedOn: '',
+        },
+        {
+          id: 'later',
+          title: 'Prepare portfolio',
+          notes: '',
+          priority: 'Low',
+          dueDate: '2026-01-16',
+          completed: false,
+          completedOn: '',
+        },
+        {
+          id: 'unscheduled',
+          title: 'Research the team',
+          notes: '',
+          priority: 'Medium',
+          dueDate: '',
+          completed: false,
+          completedOn: '',
+        },
+        {
+          id: 'completed',
+          title: 'Update LinkedIn',
+          notes: '',
+          priority: 'Low',
+          dueDate: TODAY,
+          completed: true,
+          completedOn: TODAY,
+        },
+      ],
+    });
+    const archived = makeOpportunity({
+      id: 'archived',
+      title: 'Archived Role',
+      archivedAt: '2026-01-10T10:00:00.000Z',
+      tasks: [{
+        id: 'archived-late',
+        title: 'Archived task',
+        notes: '',
+        priority: 'High',
+        dueDate: '2026-01-13',
+        completed: false,
+        completedOn: '',
+      }],
+    });
+    const { onOpenTask, onOpenActionCenter } = renderDashboard([active, archived]);
+
+    const focus = sectionByHeading("Today's Focus");
+    const rows = within(focus).getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]).getByText('Send a recruiter follow-up')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('High')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('Overdue by 1 day')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('Tailor my CV')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('Due today')).toBeInTheDocument();
+    expect(within(focus).queryByText('Prepare portfolio')).not.toBeInTheDocument();
+    expect(within(focus).queryByText('Research the team')).not.toBeInTheDocument();
+    expect(within(focus).queryByText('Update LinkedIn')).not.toBeInTheDocument();
+    expect(within(focus).queryByText('Archived task')).not.toBeInTheDocument();
+
+    const nextDays = sectionByHeading('Next 7 Days');
+    expect(within(nextDays).queryByText('Send a recruiter follow-up')).not.toBeInTheDocument();
+    expect(within(nextDays).queryByText('Tailor my CV')).not.toBeInTheDocument();
+
+    const taskButton = within(focus).getByRole('button', {
+      name: 'Open task Send a recruiter follow-up for Frontend Intern',
+    });
+    fireEvent.click(taskButton);
+    expect(onOpenTask).toHaveBeenCalledWith('active', 'late', taskButton);
+
+    fireEvent.click(within(focus).getByRole('button', { name: 'View all actions' }));
+    expect(onOpenActionCenter).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a calm empty state when no overdue or due-today work exists', () => {
+    const { onOpenActionCenter } = renderDashboard([
+      makeOpportunity({
+        tasks: [{
+          id: 'future',
+          title: 'Prepare interview',
+          notes: '',
+          priority: 'Medium',
+          dueDate: '2026-01-16',
+          completed: false,
+          completedOn: '',
+        }],
+      }),
+    ]);
+
+    const focus = sectionByHeading("Today's Focus");
+    expect(within(focus).getByText('Nothing overdue or due today.')).toBeInTheDocument();
+    expect(within(focus).queryByRole('listitem')).not.toBeInTheDocument();
+    fireEvent.click(within(focus).getByRole('button', { name: 'View all actions' }));
+    expect(onOpenActionCenter).toHaveBeenCalledTimes(1);
   });
 });

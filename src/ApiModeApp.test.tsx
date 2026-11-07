@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeOpportunity } from './test/fixtures';
+import type { TaskEntry } from '@launchboard/domain';
 import type { AuthState, UseAuthResult } from './hooks/useAuth';
 import type {
   OpportunityCollection,
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   create: vi.fn(),
   update: vi.fn(),
+  updateTasks: vi.fn(),
   archive: vi.fn(),
   restore: vi.fn(),
   remove: vi.fn(),
@@ -37,6 +39,7 @@ vi.mock('./data/httpOpportunityRepository', () => ({
     get = mocks.get;
     create = mocks.create;
     update = mocks.update;
+    updateTasks = mocks.updateTasks;
     archive = mocks.archive;
     restore = mocks.restore;
     remove = mocks.remove;
@@ -95,6 +98,7 @@ beforeEach(() => {
   mocks.get.mockReset();
   mocks.create.mockReset();
   mocks.update.mockReset();
+  mocks.updateTasks.mockReset();
   mocks.archive.mockReset();
   mocks.restore.mockReset();
   mocks.remove.mockReset();
@@ -836,3 +840,127 @@ describe('ApiModeApp', () => {
 
     window.history.replaceState({}, '', '/');
   });
+
+describe('ApiModeApp Action Center integration', () => {
+  it('creates a task through the authenticated versioned task adapter', async () => {
+    const currentResource: OpportunityResource = {
+      ...collection.items[0],
+      opportunity: makeOpportunity({
+        id: 'server-1',
+        title: 'Server role',
+        company: 'Northwind',
+      }),
+    };
+    const createdTask: TaskEntry = {
+      id: 'task-server-1',
+      title: 'Prepare interview notes',
+      notes: '',
+      priority: 'Medium',
+      dueDate: '',
+      completed: false,
+      completedOn: '',
+    };
+    const updatedResource: OpportunityResource = {
+      ...currentResource,
+      opportunity: {
+        ...currentResource.opportunity,
+        tasks: [createdTask],
+      },
+      version: currentResource.version + 1,
+      updatedAt: '2026-11-07T12:00:00.000Z',
+    };
+    mocks.load.mockResolvedValue({ revision: 7, items: [currentResource] });
+    mocks.get.mockResolvedValue(currentResource);
+    mocks.updateTasks.mockResolvedValue(updatedResource);
+
+    render(<ApiModeApp />);
+    await screen.findByText('Server role');
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }));
+    expect(screen.getByRole('heading', { name: 'Action Center' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add task' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add task' });
+    fireEvent.change(within(dialog).getByLabelText(/Task title/), {
+      target: { value: 'Prepare interview notes' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create task' }));
+
+    await waitFor(() => {
+      expect(mocks.get).toHaveBeenCalledWith('server-1');
+      expect(mocks.updateTasks).toHaveBeenCalledWith(
+        'server-1',
+        currentResource.version,
+        currentResource.opportunity,
+        [expect.objectContaining({
+          title: createdTask.title,
+          notes: createdTask.notes,
+          priority: createdTask.priority,
+          dueDate: createdTask.dueDate,
+          completed: false,
+          completedOn: '',
+          id: expect.any(String),
+        })],
+      );
+    });
+    expect(await screen.findByRole('heading', { name: 'Prepare interview notes' })).toBeInTheDocument();
+  });
+});
+
+describe('ApiModeApp Dashboard and Calendar task navigation', () => {
+  it('opens and focuses a server-backed task from Today’s Focus and Calendar', async () => {
+    const today = new Date();
+    const dueDate = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, '0'),
+      String(today.getDate()).padStart(2, '0'),
+    ].join('-');
+    const resource: OpportunityResource = {
+      ...collection.items[0],
+      opportunity: makeOpportunity({
+        id: 'server-1',
+        title: 'Server role',
+        company: 'Northwind',
+        tasks: [{
+          id: 'server-task',
+          title: 'Prepare interview notes',
+          notes: '',
+          priority: 'High',
+          dueDate,
+          completed: false,
+          completedOn: '',
+        }],
+      }),
+    };
+    mocks.load.mockResolvedValue({ revision: 7, items: [resource] });
+
+    render(<ApiModeApp />);
+    await screen.findByText('Server role');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dashboard' }));
+    const dashboardTask = await screen.findByRole('button', {
+      name: 'Open task Prepare interview notes for Server role',
+    });
+    fireEvent.click(dashboardTask);
+
+    expect(screen.getByRole('heading', { name: 'Action Center' })).toBeInTheDocument();
+    const completeFromDashboard = await screen.findByRole('button', {
+      name: 'Mark Prepare interview notes complete',
+    });
+    await waitFor(() => expect(completeFromDashboard).toHaveFocus());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Calendar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Tasks' }));
+    const selectedDay = screen.getByRole('heading', { name: 'Selected day' }).closest('section');
+    expect(selectedDay).not.toBeNull();
+    const calendarTask = within(selectedDay as HTMLElement).getByRole('button', {
+      name: new RegExp('Open task Prepare interview notes for Server role on'),
+    });
+    fireEvent.click(calendarTask);
+
+    expect(screen.getByRole('heading', { name: 'Action Center' })).toBeInTheDocument();
+    const completeFromCalendar = await screen.findByRole('button', {
+      name: 'Mark Prepare interview notes complete',
+    });
+    await waitFor(() => expect(completeFromCalendar).toHaveFocus());
+  });
+});

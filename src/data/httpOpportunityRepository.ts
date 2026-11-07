@@ -127,6 +127,17 @@ export class HttpOpportunityRepository {
     });
   }
 
+  async updateTasks(
+    id: string,
+    expectedVersion: number,
+    previous: Opportunity,
+    tasks: Opportunity['tasks'],
+  ): Promise<OpportunityResource> {
+    // Tasks remain children of the parent aggregate: the server checks the
+    // parent version and replaces all nested collections in one transaction.
+    return this.update(id, expectedVersion, previous, { ...previous, tasks });
+  }
+
   async archive(id: string, expectedVersion: number): Promise<OpportunityResource> {
     return apiJson<OpportunityResource>(`/opportunities/${encodeURIComponent(id)}/archive`, {
       method: 'POST',

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { isValidArchiveTimestamp } from './utils/archive';
-import { addDays } from './utils/dates';
+import { addDays, toISODate } from './utils/dates';
 import { createJsonBackup } from './utils/exports';
 import {
   makeActivity,
@@ -11,6 +11,7 @@ import {
   makeOpportunity,
 } from './test/fixtures';
 import App from './App';
+import type { TaskEntry } from '@launchboard/domain';
 
 const KEY = 'launchboard.opportunities.v1';
 
@@ -843,5 +844,120 @@ describe('App ordinary mutation persistence', () => {
     }[];
     expect(stored[0].materials).toHaveLength(1);
     expect(stored[0].materials[0].label).toBe('Draft resume');
+  });
+});
+
+describe('App Action Center integration', () => {
+  it('creates and completes a task in local mode and persists it with its opportunity', async () => {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([makeOpportunity({ id: 'op-1', title: 'Frontend Intern' })]),
+    );
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }));
+    expect(screen.getByRole('heading', { name: 'Action Center' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add task' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add task' });
+    fireEvent.change(within(dialog).getByLabelText(/Task title/), {
+      target: { value: 'Prepare the application' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create task' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Add task' })).not.toBeInTheDocument();
+    });
+    const created = JSON.parse(localStorage.getItem(KEY) ?? 'null') as {
+      id: string;
+      tasks: TaskEntry[];
+    }[];
+    expect(created[0].tasks).toHaveLength(1);
+    expect(created[0].tasks[0]).toMatchObject({
+      title: 'Prepare the application',
+      completed: false,
+      completedOn: '',
+    });
+
+    const completeButton = screen.getByRole('button', {
+      name: 'Mark Prepare the application complete',
+    });
+    expect(completeButton).toBeEnabled();
+    fireEvent.click(completeButton);
+
+    expect(await screen.findByRole('button', {
+      name: 'Reopen Prepare the application',
+    })).toBeInTheDocument();
+
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem(KEY) ?? 'null') as {
+        id: string;
+        tasks: TaskEntry[];
+      }[];
+      expect(stored[0].tasks[0]).toMatchObject({
+        id: created[0].tasks[0].id,
+        completed: true,
+        completedOn: toISODate(new Date()),
+      });
+    });
+    expect(screen.getByRole('heading', { name: 'Completed' })).toBeInTheDocument();
+  });
+});
+
+function formatLocalDateForTest(iso: string): string {
+  const [year, month, day] = iso.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+describe('App Dashboard and Calendar task navigation', () => {
+  it('opens the focused task action from Today’s Focus and the Calendar Tasks filter', async () => {
+    const today = toISODate(new Date());
+    const opportunity = makeOpportunity({
+      id: 'stage-five-opportunity',
+      title: 'Frontend Intern',
+      company: 'Northwind Labs',
+      tasks: [{
+        id: 'stage-five-task',
+        title: 'Tailor my CV',
+        notes: '',
+        priority: 'High',
+        dueDate: today,
+        completed: false,
+        completedOn: '',
+      }],
+    });
+    localStorage.setItem(KEY, JSON.stringify([opportunity]));
+
+    render(<App />);
+
+    const dashboardTask = screen.getByRole('button', {
+      name: 'Open task Tailor my CV for Frontend Intern',
+    });
+    fireEvent.click(dashboardTask);
+
+    expect(screen.getByRole('heading', { name: 'Action Center' })).toBeInTheDocument();
+    const completeFromDashboard = await screen.findByRole('button', {
+      name: 'Mark Tailor my CV complete',
+    });
+    await waitFor(() => expect(completeFromDashboard).toHaveFocus());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Calendar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Tasks' }));
+    const selectedDay = screen.getByRole('heading', { name: 'Selected day' }).closest('section');
+    expect(selectedDay).not.toBeNull();
+    const calendarTask = within(selectedDay as HTMLElement).getByRole('button', {
+      name: `Open task Tailor my CV for Frontend Intern on ${formatLocalDateForTest(today)}`,
+    });
+    fireEvent.click(calendarTask);
+
+    expect(screen.getByRole('heading', { name: 'Action Center' })).toBeInTheDocument();
+    const completeFromCalendar = await screen.findByRole('button', {
+      name: 'Mark Tailor my CV complete',
+    });
+    await waitFor(() => expect(completeFromCalendar).toHaveFocus());
   });
 });

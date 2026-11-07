@@ -506,16 +506,18 @@ export function Opportunities({
               <thead className="max-[640px]:block">
                 <tr className="max-[640px]:flex max-[640px]:items-center">
                   <th scope="col" className={tableHeadCellClass + ' lb-opportunity-heading-cell'}>
-                    <input
-                      ref={masterRef}
-                      type="checkbox"
-                      className={checkboxClass}
-                      aria-label="Select all visible opportunities"
-                      checked={allVisibleSelected}
-                      onChange={(e) => toggleAllVisible(e.target.checked)}
-                    />
+                    <label className="lb-opportunity-select-all-control">
+                      <input
+                        ref={masterRef}
+                        type="checkbox"
+                        className={checkboxClass}
+                        aria-label="Select all visible opportunities"
+                        checked={allVisibleSelected}
+                        onChange={(e) => toggleAllVisible(e.target.checked)}
+                      />
+                      <span className="hidden max-[640px]:inline">Select all</span>
+                    </label>
                     <span className="max-[640px]:hidden">Opportunity</span>
-                    <span className="hidden max-[640px]:inline">Select all</span>
                   </th>
                   <th scope="col" className={`${tableHeadCellClass} max-[640px]:hidden`}>Company</th>
                   <th scope="col" className={`${tableHeadCellClass} max-[640px]:hidden`}>Type / Priority</th>

@@ -521,3 +521,168 @@ describe('calendarEventTiming', () => {
     ).toBeNull();
   });
 });
+
+describe('task calendar events', () => {
+  it('derives only dated open tasks and keeps their identity and priority distinct', () => {
+    const item = makeOpportunity({
+      id: 'task-parent',
+      title: 'Frontend Intern',
+      company: 'Northwind',
+      tasks: [
+        {
+          id: 'late',
+          title: 'Send recruiter follow-up',
+          notes: '',
+          priority: 'High',
+          dueDate: '2026-01-14',
+          completed: false,
+          completedOn: '',
+        },
+        {
+          id: 'today',
+          title: 'Tailor CV',
+          notes: '',
+          priority: 'Medium',
+          dueDate: TODAY,
+          completed: false,
+          completedOn: '',
+        },
+        {
+          id: 'future',
+          title: 'Prepare portfolio',
+          notes: '',
+          priority: 'Low',
+          dueDate: '2026-01-20',
+          completed: false,
+          completedOn: '',
+        },
+        {
+          id: 'unscheduled',
+          title: 'Research team',
+          notes: '',
+          priority: 'Medium',
+          dueDate: '',
+          completed: false,
+          completedOn: '',
+        },
+        {
+          id: 'completed',
+          title: 'Update profile',
+          notes: '',
+          priority: 'Low',
+          dueDate: TODAY,
+          completed: true,
+          completedOn: TODAY,
+        },
+        {
+          id: 'invalid',
+          title: 'Invalid due date',
+          notes: '',
+          priority: 'Medium',
+          dueDate: '2026-02-30',
+          completed: false,
+          completedOn: '',
+        },
+      ],
+    });
+
+    const events = deriveCalendarEvents([item]);
+    const taskEvents = events.filter((event) => event.type === 'task');
+
+    expect(taskEvents).toHaveLength(3);
+    expect(taskEvents.map((event) => event.id)).toEqual([
+      'task:task-parent:late',
+      'task:task-parent:today',
+      'task:task-parent:future',
+    ]);
+    expect(taskEvents[0]).toMatchObject({
+      type: 'task',
+      opportunityId: 'task-parent',
+      opportunityTitle: 'Frontend Intern',
+      opportunityCompany: 'Northwind',
+      date: '2026-01-14',
+      taskId: 'late',
+      taskTitle: 'Send recruiter follow-up',
+      taskPriority: 'High',
+    });
+    expect(calendarEventTiming(taskEvents[0], TODAY)).toEqual({
+      state: 'overdue',
+      text: 'Task overdue by 1 day',
+    });
+    expect(calendarEventTiming(taskEvents[1], TODAY)).toEqual({
+      state: 'today',
+      text: 'Task due today',
+    });
+    expect(calendarEventTiming(taskEvents[2], TODAY)).toEqual({
+      state: 'upcoming',
+      text: 'Task due in 5 days',
+    });
+    expect(overdueEvents(events, TODAY).map((event) => event.id)).toContain('task:task-parent:late');
+    expect(upcomingEvents(events, TODAY).map((event) => event.id)).toContain('task:task-parent:today');
+  });
+
+  it('adds a dedicated Tasks filter without changing deadline, follow-up or interview filtering', () => {
+    const events = deriveCalendarEvents([
+      allTypesOpportunity({
+        tasks: [{
+          id: 'action',
+          title: 'Prepare work sample',
+          notes: '',
+          priority: 'High',
+          dueDate: '2026-01-19',
+          completed: false,
+          completedOn: '',
+        }],
+      }),
+    ]);
+
+    expect(filterCalendarEvents(events, 'task').map((event) => event.id)).toEqual([
+      'task:op-1:action',
+    ]);
+    expect(filterCalendarEvents(events, 'deadline').map((event) => event.id)).toEqual([
+      'deadline:op-1',
+    ]);
+    expect(filterCalendarEvents(events, 'follow-up').map((event) => event.id)).toEqual([
+      'follow-up:op-1',
+    ]);
+    expect(filterCalendarEvents(events, 'interview')).toHaveLength(2);
+    expect(filterCalendarEvents(events, 'all')).toHaveLength(5);
+  });
+
+  it('excludes tasks belonging to archived opportunities and never mutates their source', () => {
+    const items = [
+      makeOpportunity({
+        id: 'active',
+        tasks: [{
+          id: 'visible',
+          title: 'Visible task',
+          notes: '',
+          priority: 'Medium',
+          dueDate: '2026-01-19',
+          completed: false,
+          completedOn: '',
+        }],
+      }),
+      makeOpportunity({
+        id: 'archived',
+        archivedAt: '2026-01-10T10:00:00.000Z',
+        tasks: [{
+          id: 'hidden',
+          title: 'Archived task',
+          notes: '',
+          priority: 'High',
+          dueDate: '2026-01-19',
+          completed: false,
+          completedOn: '',
+        }],
+      }),
+    ];
+    const snapshot = JSON.parse(JSON.stringify(items)) as Opportunity[];
+
+    const events = deriveCalendarEvents(items);
+    expect(events.filter((event) => event.type === 'task').map((event) => event.id)).toEqual([
+      'task:active:visible',
+    ]);
+    expect(items).toEqual(snapshot);
+  });
+});

@@ -29,6 +29,12 @@ export const MAX_CONTACT_PHONE_LENGTH = 40;
 export const MAX_CONTACT_WEBSITE_LENGTH = 2048;
 export const MAX_CONTACT_NOTES_LENGTH = 2000;
 
+/** Maximum tasks stored on one opportunity. */
+export const MAX_TASKS = 100;
+export const MAX_TASK_ID_LENGTH = 128;
+export const MAX_TASK_TITLE_LENGTH = 160;
+export const MAX_TASK_NOTES_LENGTH = 1000;
+
 /** Maximum materials on one opportunity. */
 export const MAX_MATERIALS = 25;
 export const MAX_MATERIAL_LABEL_LENGTH = 120;

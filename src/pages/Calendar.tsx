@@ -11,6 +11,7 @@ import {
   BellRing,
   CalendarClock,
   CheckCircle2,
+  ListTodo,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -56,12 +57,15 @@ interface Props {
   items: Opportunity[];
   /** The optional second argument is the control that opened the dialog. */
   onOpen: (item: Opportunity, trigger?: HTMLElement | null) => void;
+  /** Opens the selected task in the Action Center rather than the opportunity editor. */
+  onOpenTask?: (opportunityId: string, taskId: string, trigger?: HTMLElement | null) => void;
 }
 
 const FILTERS: { value: CalendarEventFilter; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'deadline', label: 'Deadlines' },
   { value: 'follow-up', label: 'Follow-ups' },
+  { value: 'task', label: 'Tasks' },
   { value: 'interview', label: 'Interviews' },
 ];
 
@@ -75,6 +79,11 @@ const eventVisuals: Record<CalendarEventType, { icon: LucideIcon; badgeClass: st
     icon: BellRing,
     badgeClass: 'bg-accent-soft text-accent-dark',
     cellClass: 'bg-accent-soft text-accent-dark',
+  },
+  task: {
+    icon: ListTodo,
+    badgeClass: 'bg-status-applied text-status-applied-text',
+    cellClass: 'bg-status-applied text-status-applied-text',
   },
   interview: {
     icon: MessagesSquare,
@@ -96,7 +105,7 @@ const interviewStatusClass: Record<InterviewStatus, string> = {
 };
 
 const filterButtonClass =
-  'cursor-pointer rounded-control border px-s3 py-[6px] text-[0.82rem] font-medium';
+  'min-h-11 cursor-pointer rounded-control border px-s3 text-[0.82rem] font-medium';
 const emptyStateClass =
   'm-0 rounded-control border border-dashed border-border bg-table-head/50 p-s4 text-center text-[0.85rem] text-muted';
 
@@ -138,6 +147,7 @@ function InterviewStatusBadge({ status }: { status: InterviewStatus }) {
 function cellEventLabel(event: CalendarEvent): string {
   if (event.type === 'deadline') return 'Deadline';
   if (event.type === 'follow-up') return 'Follow-up';
+  if (event.type === 'task') return 'Task';
   return event.label;
 }
 
@@ -146,7 +156,7 @@ function eventCountSummary(events: CalendarEvent[]): string {
   for (const event of events) {
     counts.set(event.type, (counts.get(event.type) ?? 0) + 1);
   }
-  return (['deadline', 'follow-up', 'interview'] as const)
+  return (['deadline', 'follow-up', 'task', 'interview'] as const)
     .filter((type) => counts.has(type))
     .map((type) => {
       const count = counts.get(type) ?? 0;
@@ -157,11 +167,11 @@ function eventCountSummary(events: CalendarEvent[]): string {
 
 function eventStatusSummary(events: CalendarEvent[]): string {
   return events
-    .map((event) =>
-      event.type === 'interview'
-        ? `${event.label}: ${event.interviewStatus} interview`
-        : eventTypeLabel(event.type).toLowerCase(),
-    )
+    .map((event) => {
+      if (event.type === 'interview') return `${event.label}: ${event.interviewStatus} interview`;
+      if (event.type === 'task') return `${event.taskTitle} task for ${event.opportunityTitle}`;
+      return eventTypeLabel(event.type).toLowerCase();
+    })
     .join(', ');
 }
 
@@ -183,6 +193,9 @@ function dateAccessibleName(
 }
 
 function eventActionLabel(event: CalendarEvent): string {
+  if (event.type === 'task') {
+    return `Open task ${event.taskTitle} for ${event.opportunityTitle} on ${formatDate(event.date)}`;
+  }
   if (event.type === 'interview') {
     return `Open ${event.opportunityTitle} for ${event.label} interview (${event.interviewStatus}) on ${formatDate(event.date)}`;
   }
@@ -194,13 +207,18 @@ interface EventCardProps {
   opportunity: Opportunity | undefined;
   today: string;
   onOpen: (item: Opportunity, trigger?: HTMLElement | null) => void;
+  onOpenTask?: (opportunityId: string, taskId: string, trigger?: HTMLElement | null) => void;
 }
 
-function EventCard({ event, opportunity, today, onOpen }: EventCardProps) {
+function EventCard({ event, opportunity, today, onOpen, onOpenTask }: EventCardProps) {
   if (!opportunity) return null;
   const timing = calendarEventTiming(event, today);
 
   const open = (clickEvent: MouseEvent<HTMLButtonElement>) => {
+    if (event.type === 'task' && onOpenTask) {
+      onOpenTask(event.opportunityId, event.taskId, clickEvent.currentTarget);
+      return;
+    }
     onOpen(opportunity, clickEvent.currentTarget);
   };
 
@@ -219,6 +237,11 @@ function EventCard({ event, opportunity, today, onOpen }: EventCardProps) {
         {event.type === 'interview' && event.time && (
           <span className="inline-flex items-center gap-s1 text-[0.8rem] text-muted">
             <Clock size={12} aria-hidden /> {event.time}
+          </span>
+        )}
+        {event.type === 'task' && (
+          <span className="rounded-pill border border-border bg-table-head px-[8px] py-[2px] text-[0.72rem] font-semibold text-muted">
+            {event.taskPriority} priority
           </span>
         )}
         {event.type === 'interview' && (
@@ -243,6 +266,11 @@ function EventCard({ event, opportunity, today, onOpen }: EventCardProps) {
       <span className="block break-words text-[0.84rem] text-muted">
         {event.opportunityCompany}
       </span>
+      {event.type === 'task' && (
+        <span className="mt-s1 block break-words text-[0.82rem] text-muted">
+          Task: {event.taskTitle}
+        </span>
+      )}
       {event.type === 'interview' && (
         <span className="mt-s1 block break-words text-[0.82rem] text-muted">
           Round: {event.label}
@@ -250,7 +278,7 @@ function EventCard({ event, opportunity, today, onOpen }: EventCardProps) {
       )}
       <span className="mt-s2 flex flex-wrap items-center justify-between gap-s2">
         <span className="inline-flex items-center gap-s1 text-[0.82rem] font-semibold text-accent-dark">
-          View opportunity <ArrowRight size={13} aria-hidden />
+          {event.type === 'task' ? 'Open task actions' : 'View opportunity'} <ArrowRight size={13} aria-hidden />
         </span>
         <StatusBadge status={event.opportunityStatus} />
       </span>
@@ -258,7 +286,7 @@ function EventCard({ event, opportunity, today, onOpen }: EventCardProps) {
   );
 }
 
-export function Calendar({ items, onOpen }: Props) {
+export function Calendar({ items, onOpen, onOpenTask }: Props) {
   const [today] = useState(() => toISODate(new Date()));
   const [monthStart, setMonthStart] = useState(() => startOfMonth(today) ?? today);
   const [selectedDate, setSelectedDate] = useState(today);
@@ -365,9 +393,11 @@ export function Calendar({ items, onOpen }: Props) {
       ? 'No overdue deadlines.'
       : filter === 'follow-up'
         ? 'No overdue follow-ups.'
-        : filter === 'interview'
-          ? 'No past-due Scheduled interviews.'
-          : 'No overdue events.';
+        : filter === 'task'
+          ? 'No overdue tasks.'
+          : filter === 'interview'
+            ? 'No past-due Scheduled interviews.'
+            : 'No overdue events.';
   const scheduledInterviewExists = visibleEvents.some(
     (event) => event.type === 'interview' && event.interviewStatus === 'Scheduled',
   );
@@ -376,11 +406,13 @@ export function Calendar({ items, onOpen }: Props) {
       ? `No deadlines due in the next ${UPCOMING_RANGE_DAYS} days.`
       : filter === 'follow-up'
         ? `No follow-ups due in the next ${UPCOMING_RANGE_DAYS} days.`
-        : filter === 'interview'
-          ? scheduledInterviewExists
-            ? `No interviews scheduled in the next ${UPCOMING_RANGE_DAYS} days.`
-            : 'No interviews scheduled yet.'
-          : `Nothing scheduled in the next ${UPCOMING_RANGE_DAYS} days.`;
+        : filter === 'task'
+          ? `No tasks due in the next ${UPCOMING_RANGE_DAYS} days.`
+          : filter === 'interview'
+            ? scheduledInterviewExists
+              ? `No interviews scheduled in the next ${UPCOMING_RANGE_DAYS} days.`
+              : 'No interviews scheduled yet.'
+            : `Nothing scheduled in the next ${UPCOMING_RANGE_DAYS} days.`;
 
   const weeks: string[][] = [];
   for (let index = 0; index < monthDates.length; index += 7) {
@@ -392,9 +424,9 @@ export function Calendar({ items, onOpen }: Props) {
       <header className="mb-s5">
         <h1>Calendar</h1>
         <p className="text-[0.9rem] text-muted">
-          Deadlines, follow-ups and interview rounds in one schedule. Archived opportunities are
-          excluded. The month grid keeps Completed and Cancelled interviews for history; Upcoming
-          only lists appointments that are still Scheduled.
+          Deadlines, follow-ups, dated tasks and interview rounds in one schedule. Archived opportunities
+          are excluded. Completed tasks stay in the Action Center; the month grid keeps Completed and
+          Cancelled interviews for history, while Upcoming only lists Scheduled interviews.
         </p>
       </header>
 
@@ -574,6 +606,7 @@ export function Calendar({ items, onOpen }: Props) {
                     opportunity={opportunitiesById.get(event.opportunityId)}
                     today={today}
                     onOpen={onOpen}
+                    onOpenTask={onOpenTask}
                   />
                 </li>
               ))}
@@ -605,6 +638,7 @@ export function Calendar({ items, onOpen }: Props) {
                       opportunity={opportunitiesById.get(event.opportunityId)}
                       today={today}
                       onOpen={onOpen}
+                      onOpenTask={onOpenTask}
                     />
                   </li>
                 ))}
@@ -641,6 +675,7 @@ export function Calendar({ items, onOpen }: Props) {
                       opportunity={opportunitiesById.get(event.opportunityId)}
                       today={today}
                       onOpen={onOpen}
+                      onOpenTask={onOpenTask}
                     />
                   </li>
                 ))}

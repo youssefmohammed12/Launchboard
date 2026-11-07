@@ -23,6 +23,7 @@ export function makeOpportunity(overrides: Partial<Opportunity> = {}): Opportuni
     interviews: [],
     contacts: [],
     materials: [],
+    tasks: [],
     compensation: '',
     description: '',
     notes: '',

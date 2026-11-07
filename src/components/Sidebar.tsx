@@ -2,6 +2,7 @@ import {
   CalendarClock,
   CalendarDays,
   ChartColumn,
+  ClipboardCheck,
   LayoutDashboard,
   ListChecks,
   Rocket,
@@ -14,6 +15,7 @@ import type { View } from '../types/opportunity';
 const ITEMS: { view: View; label: string; icon: LucideIcon }[] = [
   { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { view: 'opportunities', label: 'Opportunities', icon: ListChecks },
+  { view: 'action-center', label: 'Actions', icon: ClipboardCheck },
   { view: 'calendar', label: 'Calendar', icon: CalendarDays },
   { view: 'deadlines', label: 'Deadlines', icon: CalendarClock },
   { view: 'reports', label: 'Reports', icon: ChartColumn },
@@ -70,7 +72,14 @@ export function Sidebar({
                 onClick={() => onNavigate(view)}
               >
                 <Icon size={18} aria-hidden="true" />
-                <span>{label}</span>
+                <span>
+                  {view === 'opportunities' ? (
+                    <>
+                      <span className="lb-nav-full-label">Opportunities</span>
+                      <span className="lb-nav-short-label">Opps</span>
+                    </>
+                  ) : label}
+                </span>
               </button>
             </li>
           ))}

@@ -50,12 +50,13 @@ const validOpportunity = {
     status: 'Ready',
     notes: '',
   }],
+  tasks: [],
   compensation: '',
   description: '',
   notes: '',
 };
 
-describe('version-1 backup record normalization', () => {
+describe('versioned backup record normalization', () => {
   it('keeps a complete canonical record unchanged', () => {
     const result = normalizeBackupOpportunityRecord(validOpportunity);
     expect(result).toEqual({
@@ -127,6 +128,56 @@ describe('version-1 backup record normalization', () => {
       activities: [validOpportunity.activities[0]],
     });
     expect(result.opportunity).not.toHaveProperty('archivedAt');
+  });
+
+  it('imports version-1 records without tasks, ignoring any unversioned task field', () => {
+    const legacyTask = {
+      id: 'legacy-task',
+      title: 'Should not be imported from v1',
+      notes: '',
+      priority: 'High',
+      dueDate: '',
+      completed: false,
+      completedOn: '',
+    };
+    const result = normalizeBackupOpportunityRecord({
+      ...validOpportunity,
+      tasks: [legacyTask],
+    }, 1);
+
+    expect(result.opportunity?.tasks).toEqual([]);
+    expect(result.repaired).toBe(true);
+  });
+
+  it('normalizes valid version-2 tasks and reports missing or repaired task data', () => {
+    const task = {
+      id: 'task-1',
+      title: 'Prepare for interview',
+      notes: 'Review the role',
+      priority: 'High',
+      dueDate: '2026-11-08',
+      completed: false,
+      completedOn: '',
+    };
+    const valid = normalizeBackupOpportunityRecord({
+      ...validOpportunity,
+      tasks: [task],
+    }, 2);
+    expect(valid.opportunity?.tasks).toEqual([task]);
+    expect(valid.repaired).toBe(false);
+
+    const { tasks: _omittedTasks, ...recordWithoutTasks } = validOpportunity;
+    const missing = normalizeBackupOpportunityRecord(recordWithoutTasks, 2);
+    expect(missing.opportunity?.tasks).toEqual([]);
+    expect(missing.repaired).toBe(true);
+
+    const repaired = normalizeBackupOpportunityRecord({
+      ...validOpportunity,
+      tasks: [task, { ...task, id: 'task-2', priority: 'Urgent' }],
+    }, 2);
+    expect(repaired.opportunity?.tasks).toHaveLength(2);
+    expect(repaired.opportunity?.tasks[1]?.priority).toBe('Medium');
+    expect(repaired.repaired).toBe(true);
   });
 
   it('preserves valid archive instants and demo markers', () => {

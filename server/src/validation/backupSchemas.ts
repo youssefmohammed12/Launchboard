@@ -5,7 +5,7 @@ import {
 import { z } from 'zod';
 
 /**
- * The version-1 backup envelope. Validation mirrors the frontend importer:
+ * The versioned backup envelope (v1 and v2). Validation mirrors the frontend importer:
  * the format marker, schema version, advisory `exportedAt` and the record array
  * are checked, while individual records stay opaque so the import service can
  * skip/count invalid and duplicate records instead of failing the whole file.
@@ -18,7 +18,7 @@ export const backupEnvelopeSchema = z.object({
   // Keep the numeric version so the route can report unsupported-schema
   // explicitly instead of treating it as an ordinary shape error.
   schemaVersion: z.number().int('must be an integer'),
-  // exportedAt is advisory in v1. The browser importer ignores malformed
+  // exportedAt is advisory metadata. The browser importer ignores malformed
   // metadata, so the server must not reject an otherwise usable backup.
   exportedAt: z.unknown().optional(),
   opportunities: z

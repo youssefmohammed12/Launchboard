@@ -1,11 +1,12 @@
 import {
+  BACKUP_SUPPORTED_SCHEMA_VERSIONS,
   MAX_BACKUP_RECORDS,
   normalizeBackupOpportunityRecord,
   type BackupRecordFailure,
   type LaunchboardBackup,
 } from '@launchboard/domain';
 import type { Opportunity } from '../types/opportunity';
-import { BACKUP_FORMAT, BACKUP_SCHEMA_VERSION } from './exports';
+import { BACKUP_FORMAT } from './exports';
 import { parseOpportunityCsv } from './csvImport';
 
 export { MAX_BACKUP_BYTES, MAX_BACKUP_RECORDS } from '@launchboard/domain';
@@ -130,14 +131,15 @@ export function parseBackupJson(text: string): BackupParseResult {
     );
   }
 
-  if (typeof envelope.schemaVersion !== 'number' || !Number.isInteger(envelope.schemaVersion)) {
+  const schemaVersion = envelope.schemaVersion;
+  if (typeof schemaVersion !== 'number' || !Number.isInteger(schemaVersion)) {
     return parseError('invalid-envelope', 'The backup is missing a valid schema version.');
   }
 
-  if (envelope.schemaVersion !== BACKUP_SCHEMA_VERSION) {
+  if (!(BACKUP_SUPPORTED_SCHEMA_VERSIONS as readonly number[]).includes(schemaVersion)) {
     return parseError(
       'unsupported-schema',
-      `This backup uses schema version ${envelope.schemaVersion}, but this build supports version ${BACKUP_SCHEMA_VERSION}.`,
+      `This backup uses schema version ${schemaVersion}; supported versions are ${BACKUP_SUPPORTED_SCHEMA_VERSIONS.join(' and ')}.`,
     );
   }
 
@@ -164,7 +166,7 @@ export function parseBackupJson(text: string): BackupParseResult {
   let duplicateRecords = 0;
 
   envelope.opportunities.forEach((raw, index) => {
-    const normalized = normalizeBackupOpportunityRecord(raw);
+    const normalized = normalizeBackupOpportunityRecord(raw, schemaVersion);
     if (!normalized.opportunity) {
       invalidRecords += 1;
       skipped.push({

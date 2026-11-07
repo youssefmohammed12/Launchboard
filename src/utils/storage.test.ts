@@ -66,11 +66,55 @@ describe('loadOpportunities', () => {
       interviews: [],
       contacts: [],
       materials: [],
+      tasks: [],
       compensation: '',
       description: '',
       notes: '',
     });
     expect(item.isDemo).toBeUndefined();
+  });
+
+  it('normalizes legacy tasks to an empty collection and safely repairs malformed task children', () => {
+    const task = {
+      id: 'task-1',
+      title: 'Prepare for interview',
+      notes: 'Review the role',
+      priority: 'High',
+      dueDate: '2026-11-08',
+      completed: false,
+      completedOn: '',
+    };
+    store([{
+      ...minimalRecord,
+      id: 'with-tasks',
+      tasks: [
+        task,
+        { ...task, id: 'task-2', title: '  Follow up  ', priority: 'Urgent' },
+        { ...task, id: 'task-3', title: '   ' },
+        { ...task, id: 'task-4', completed: true, completedOn: '' },
+        task,
+      ],
+    }]);
+
+    const loaded = loadOpportunities();
+    expect(loaded[0]?.tasks).toEqual([
+      task,
+      {
+        ...task,
+        id: 'task-2',
+        title: 'Follow up',
+        priority: 'Medium',
+      },
+      {
+        ...task,
+        id: 'task-4',
+        completed: false,
+        completedOn: '',
+      },
+    ]);
+
+    store([{ ...minimalRecord, id: 'legacy-without-tasks' }]);
+    expect(loadOpportunities()[0]?.tasks).toEqual([]);
   });
 
   it('preserves a valid record, including nested activities and demo metadata', () => {

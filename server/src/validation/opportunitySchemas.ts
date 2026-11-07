@@ -12,6 +12,9 @@ import {
   MAX_CONTACT_ROLE_LENGTH,
   MAX_CONTACT_WEBSITE_LENGTH,
   MAX_INTERVIEWS,
+  MAX_TASKS,
+  MAX_TASK_NOTES_LENGTH,
+  MAX_TASK_TITLE_LENGTH,
   MAX_INTERVIEW_CONTACT_ID_LENGTH,
   MAX_INTERVIEW_LOCATION_LENGTH,
   MAX_INTERVIEW_NOTES_LENGTH,
@@ -87,6 +90,31 @@ export const materialSchema = z.strictObject({
   notes: optionalTextSchema(MAX_MATERIAL_NOTES_LENGTH),
 });
 
+export const taskSchema = z.strictObject({
+  id: idSchema.refine((value) => value.trim().length > 0, 'must not be blank'),
+  title: requiredTextSchema(MAX_TASK_TITLE_LENGTH),
+  notes: optionalTextSchema(MAX_TASK_NOTES_LENGTH),
+  priority: z.enum(PRIORITIES),
+  dueDate: optionalDateSchema,
+  completed: z.boolean(),
+  completedOn: optionalDateSchema,
+}).superRefine((task, ctx) => {
+  if (task.completed && task.completedOn === '') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['completedOn'],
+      message: 'is required when the task is completed',
+    });
+  }
+  if (!task.completed && task.completedOn !== '') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['completedOn'],
+      message: 'must be empty while the task is open',
+    });
+  }
+});
+
 /**
  * Fields that are writable through normal create/update requests. Server-managed
  * fields (`archivedAt`, versions, audit timestamps) are deliberately absent so a
@@ -116,12 +144,15 @@ const opportunityFields = {
   materials: z
     .array(materialSchema)
     .max(MAX_MATERIALS, `must contain at most ${MAX_MATERIALS} materials`),
+  tasks: z
+    .array(taskSchema)
+    .max(MAX_TASKS, `must contain at most ${MAX_TASKS} tasks`),
   compensation: z.string(),
   description: z.string(),
   notes: z.string(),
 };
 
-type ChildCollection = 'activities' | 'interviews' | 'contacts' | 'materials';
+type ChildCollection = 'activities' | 'interviews' | 'contacts' | 'materials' | 'tasks';
 
 /** The inferred writable aggregate shape, used by the cross-field checks. */
 const opportunityFieldsSchema = z.strictObject(opportunityFields);
@@ -153,6 +184,7 @@ function validateAggregate(
   addDuplicateIdIssues(ctx, value.interviews, 'interviews');
   addDuplicateIdIssues(ctx, value.contacts, 'contacts');
   addDuplicateIdIssues(ctx, value.materials, 'materials');
+  addDuplicateIdIssues(ctx, value.tasks, 'tasks');
 
   const contactIds = new Set(value.contacts.map((contact) => contact.id));
   value.interviews.forEach((interview, index) => {
@@ -215,6 +247,7 @@ export type ActivityInput = z.infer<typeof activitySchema>;
 export type InterviewInput = z.infer<typeof interviewSchema>;
 export type ContactInput = z.infer<typeof contactSchema>;
 export type MaterialInput = z.infer<typeof materialSchema>;
+export type TaskInput = z.infer<typeof taskSchema>;
 export type OpportunityCreateInput = z.infer<typeof opportunityCreateSchema>;
 export type OpportunityUpdateInput = z.infer<typeof opportunityUpdateSchema>;
 export type CreateOpportunityBody = z.infer<typeof createOpportunityBodySchema>;

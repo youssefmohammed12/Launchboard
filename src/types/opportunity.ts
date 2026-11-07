@@ -33,6 +33,8 @@ export type {
   InterviewStatus,
   MaterialDraft,
   MaterialEntry,
+  TaskDraft,
+  TaskEntry,
   MaterialKind,
   MaterialStatus,
   Opportunity,
@@ -44,7 +46,7 @@ export type {
 
 export type OpportunityFormData = Omit<
   Opportunity,
-  'id' | 'isDemo' | 'archivedAt' | 'activities' | 'interviews' | 'contacts' | 'materials'
+  'id' | 'isDemo' | 'archivedAt' | 'activities' | 'interviews' | 'contacts' | 'materials' | 'tasks'
 >;
 export type FormErrors = Partial<Record<keyof OpportunityFormData, string>>;
-export type View = 'dashboard' | 'opportunities' | 'calendar' | 'deadlines' | 'reports';
+export type View = 'dashboard' | 'opportunities' | 'action-center' | 'calendar' | 'deadlines' | 'reports';

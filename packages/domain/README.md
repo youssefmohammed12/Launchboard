@@ -10,13 +10,14 @@ This package is **contracts only**. It contains no React, no DOM access, no
 
 | Module | Contents | Why it is shared |
 |---|---|---|
-| `opportunity.ts` | `Opportunity`, `ActivityEntry`, `InterviewEntry`, `ContactEntry`, `MaterialEntry`, their draft types, and every controlled-value array (`OPPORTUNITY_STATUSES`, `PRIORITIES`, `INTERVIEW_MODES`, `MATERIAL_KINDS`, `ACTIVITY_TYPES`, …) | The database, API and UI must agree on field names and allowed values. |
+| `opportunity.ts` | `Opportunity`, `ActivityEntry`, `InterviewEntry`, `ContactEntry`, `MaterialEntry`, `TaskEntry`, their draft types, and controlled-value arrays | The database, API and UI must agree on field names and allowed values. |
 | `limits.ts` | Per-opportunity collection caps, per-field character limits and backup size/record caps | Client validation, storage normalization and server request validation must use the same numbers. |
 | `dates.ts` | `parseISODate`, `toISODate`, `isValidISODate`, `addDaysToISODate`, `daysBetweenISODates` | Calendar dates are date-only values; a server must never turn them into timestamps. |
 | `tags.ts` | `normalizeTagList` | Trim, case-insensitive dedupe and "keep the first spelling" must behave identically on both sides. |
 | `validation.ts` | `isValidUrl`, `isValidInterviewTime`, `isValidContactEmail` | Small, pure field rules that both environments apply. |
-| `backup.ts` | `BACKUP_FORMAT`, `BACKUP_SCHEMA_VERSION`, `LaunchboardBackup` | The version-1 JSON envelope is a shared wire contract. |
-| `backupNormalization.ts` | `normalizeBackupOpportunityRecord` and its typed result | Shared, environment-independent version-1 backup-record repair used by both server import and the browser backup-file import parser. |
+| `tasks.ts` | Task normalization, strict validation, create/update/complete/reopen/delete operations, Action Center grouping and deterministic task sorting | The local app and API need identical task lifecycle and classification rules. |
+| `backup.ts` | `BACKUP_FORMAT`, current `BACKUP_SCHEMA_VERSION` (v2), supported import versions and `LaunchboardBackup` | The browser and API share the full-fidelity v2 export envelope while retaining v1 import compatibility. |
+| `backupNormalization.ts` | `normalizeBackupOpportunityRecord` and its typed result | Shared, environment-independent repair for versioned backup records. V1 records normalize to an empty task collection; v2 task data is preserved and validated/repaired consistently in browser and server imports. |
 
 ## What does not belong here
 
@@ -33,11 +34,12 @@ These are deliberately separate policies.
 - **Browser storage recovery** (`src/utils/storage.ts`) remains browser-specific.
   It preserves localStorage recovery state, write blocking and UI diagnostics.
   Do not move those responsibilities into this package.
-- **Version-1 backup import repair** (`backupNormalization.ts`) is pure and
+- **Versioned backup import repair** (`backupNormalization.ts`) is pure and
   environment-independent. Both the server import path and the browser
-  version-1 backup-file parser use it to repair optional fields, drop malformed
-  children, keep first valid child IDs and clear dangling interview-contact
-  references while retaining valid parent records. Browser localStorage
+  backup-file parser use it to repair optional fields, drop malformed children,
+  keep first valid child IDs and clear dangling interview-contact references
+  while retaining valid parent records. V1 imports receive `tasks: []`; v2
+  task children are normalized with the shared task rules. Browser localStorage
   recovery remains a separate frontend-only policy.
 - **Normal API writes** remain strict. An invalid field in a `POST`/`PUT` body
   is rejected with `422 VALIDATION_ERROR`; it is never silently repaired.
@@ -64,7 +66,9 @@ The frontend keeps its existing import paths through thin re-export modules:
   and envelope type.
 
 Components do not import the package directly; they keep importing the frontend
-modules.
+modules. The v1.2 task contract is now integrated into the normalized Opportunity
+aggregate for local and API modes. Task operations and the Action Center UI
+remain later implementation stages.
 
 ## Build order
 
@@ -118,8 +122,10 @@ responsibilities.
 
 ## Tests
 
-`packages/domain/test/contract.test.ts` verifies the controlled values, date and
-tag rules, field predicates, backup constants, and environment independence. It
-is included in the root Vitest run. Existing frontend tests continue to verify
-that the re-export wrappers and the permissive storage normalizers behave as
-before.
+- `packages/domain/test/contract.test.ts` verifies controlled values, date and
+  tag rules, field predicates, backup constants and environment independence.
+- `packages/domain/test/tasks.test.ts` verifies task limits, strict validation,
+  normalization/repair behavior, date classification and deterministic grouping.
+- Both files are included in the root Vitest run. Existing frontend tests
+  continue to verify that frontend re-export wrappers and storage normalizers
+  behave as before.

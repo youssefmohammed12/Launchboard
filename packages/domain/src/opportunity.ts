@@ -93,6 +93,24 @@ export interface MaterialEntry {
 
 export type MaterialDraft = Omit<MaterialEntry, 'id'>;
 
+/**
+ * A concrete action owned by one opportunity. Due and completion dates are
+ * local calendar dates in YYYY-MM-DD form; '' represents an unset date.
+ */
+export interface TaskEntry {
+  id: string;
+  title: string;
+  notes: string;
+  priority: Priority;
+  dueDate: string;
+  completed: boolean;
+  /** Local calendar date on which the task was completed, or '' while open. */
+  completedOn: string;
+}
+
+/** Editable task content; completion state is changed through explicit lifecycle operations. */
+export type TaskDraft = Pick<TaskEntry, 'title' | 'notes' | 'priority' | 'dueDate'>;
+
 export interface Opportunity {
   id: string;
   title: string;
@@ -116,6 +134,8 @@ export interface Opportunity {
   contacts: ContactEntry[];
   /** Application materials associated with this opportunity, in insertion order. */
   materials: MaterialEntry[];
+  /** Opportunity-owned tasks; normalized records always provide an array. */
+  tasks: TaskEntry[];
   compensation: string;
   description: string;
   notes: string;

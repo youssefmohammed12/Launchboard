@@ -1,6 +1,6 @@
 # Launchboard Backend Contract
 
-**Status: implemented contract.** The React/Vite frontend supports a default localStorage workspace and an opt-in authenticated API workspace. The Express/TypeScript API, shared domain package, user-scoped opportunity aggregate, nested workspace, bulk actions/Undo, version-1 backup import/export, email verification, and password recovery are implemented. The hosted application is deployed on Vercel and uses TiDB Cloud Serverless; local development is supported with MySQL/MariaDB. Local database and release checks are documented in docs/deployment-readiness.md. This document describes the current Node.js + Express + TypeScript + MySQL-compatible backend contract.
+**Status: implemented contract with an in-progress v1.2 extension.** The React/Vite frontend supports a default localStorage workspace and an opt-in authenticated API workspace. The Express/TypeScript API, shared domain package, user-scoped opportunity aggregate, existing nested workspace, bulk actions/Undo, email verification and password recovery are implemented. The v1.2 feature branch adds opportunity-owned tasks to the shared aggregate, emits JSON backup schema v2 and retains v1 import compatibility. Additive database migration 004 is authored and structurally tested, but has **not** been applied to the local or production database; the deployed v1.1.0 schema remains at migration 003. Local database and release checks are documented in docs/deployment-readiness.md. This document describes the current Node.js + Express + TypeScript + MySQL-compatible backend contract.
 
 The browser app supports localStorage and opt-in API modes. `launchboard.opportunities.v1`, `launchboard.recovery.raw.v1` and `launchboard.views.v1` remain browser-local keys; API mode does not replace or delete them. Saved Views remain local preferences.
 
@@ -33,6 +33,7 @@ The authoritative frontend type is `src/types/opportunity.ts`.
 | `interviews` | `InterviewEntry[]` | Insertion order is authoritative; display sorts chronologically. |
 | `contacts` | `ContactEntry[]` | Insertion order is authoritative. |
 | `materials` | `MaterialEntry[]` | Insertion order is authoritative. |
+| `tasks` | `TaskEntry[]` | Required normalized collection; older local records and v1 backups normalize to `[]`. Task IDs are unique within the parent opportunity; insertion order is authoritative. |
 
 ### 1.2 Nested records
 
@@ -42,6 +43,7 @@ The authoritative frontend type is `src/types/opportunity.ts`.
 | Interview | `id`, `round`, `date`, `time` (`HH:mm` or `''`), `mode`, `status`, `outcome` (`''` or value), `meetingUrl`, `location`, `preparationNotes`, `notes`, `contactId` | `round` and real date required. Unknown mode/status/outcome repair to `Other`/`Scheduled`/`''`. `contactId` must be a contact in the same opportunity, or `''`. Max 25 per opportunity. |
 | Contact | `id`, `name`, `role`, `email`, `phone`, `website`, `notes` | `name` required. Invalid optional email/website repair to `''`. Max 25 per opportunity. |
 | Material | `id`, `label`, `kind`, `url`, `version`, `status`, `notes` | `label` required. Unknown kind/status repair to `Other`/`Draft`; invalid URL repairs to `''`. Max 25 per opportunity. |
+| Task | `id`, `title`, `notes`, `priority`, `dueDate`, `completed`, `completedOn` | Opportunity-owned child. Required nonblank title; optional notes/date; priority Low/Medium/High. Max 100; ID 128, title 160 and notes 1,000 characters. Completion requires a valid local date; open tasks must have an empty completion date. |
 
 ### 1.3 Controlled values and limits
 
@@ -54,8 +56,8 @@ The authoritative frontend type is `src/types/opportunity.ts`.
 - Material kinds: `Resume`, `Cover Letter`, `Portfolio`, `Assessment`, `Other`.
 - Material statuses: `Draft`, `Ready`, `Submitted`, `Superseded`.
 - Activity types: `Application submitted`, `Recruiter contacted`, `Interview scheduled`, `Interview completed`, `Follow-up sent`, `Other`, plus system `Status changed`.
-- Limits: 25 interviews, 25 contacts, 25 materials, 10 tags, 24 characters per tag.
-- Text limits: interview round 80, location 160, notes 2000, URL 2048, contact ID 120; contact name/role 120, email 254, phone 40, website 2048, notes 2000; material label 120, version 80, URL 2048, notes 2000.
+- Limits: 25 interviews, 25 contacts, 25 materials, 100 tasks, 10 tags, 24 characters per tag.
+- Text limits: interview round 80, location 160, notes 2000, URL 2048, contact ID 120; contact name/role 120, email 254, phone 40, website 2048, notes 2000; material label 120, version 80, URL 2048, notes 2000; task ID 128, title 160, notes 1,000.
 - Opportunity `title`, `company`, `compensation`, `description`, `notes`, `url` have **no explicit frontend maximum**. The database design must not silently truncate them.
 
 ### 1.4 Current persistence and transaction behavior
@@ -67,7 +69,7 @@ The authoritative frontend type is `src/types/opportunity.ts`.
 - Archive/restore changes only `archivedAt`; status changes append one `Status changed` activity using the user's local date.
 - Delete removes the opportunity. Undo is in memory for 10 seconds and re-inserts a deep snapshot at its original index.
 - Bulk delete Undo restores each snapshot at its original collection index.
-- JSON import is versioned (`launchboard-backup`, schema version 1), transactional, and supports merge or replace. Merge skips incoming IDs that already exist; replace uses only valid unique incoming records.
+- JSON export uses `launchboard-backup` schema v2 and includes the complete task collection. Browser and API import accept v1 and v2; v1 records normalize to `tasks: []`. Import remains transactional and supports merge or replace.
 - Local recovery preserves the exact unreadable raw localStorage string. That raw string is **not** necessarily valid backup JSON.
 
 ---
@@ -93,7 +95,7 @@ MySQL / MariaDB database `launchboard`
 ```
 
 - The SPA and API are separate deployable pieces, but production should serve both from one origin (reverse proxy or Express static hosting) to simplify cookies and CSRF.
-- The backend reuses the same domain rules as the frontend. Those rules live in `packages/domain` (`@launchboard/domain`): domain types and controlled values, field/collection limits, strict calendar-date rules, tag normalization, field predicates, the version-1 backup envelope and the shared backup-record normalizer. The frontend consumes shared rules through re-export wrappers, and its version-1 backup file-import parser uses `normalizeBackupOpportunityRecord`. Browser localStorage recovery remains frontend-only; ordinary server request validation remains strict.
+- The backend reuses the same domain rules as the frontend. Those rules live in `packages/domain` (`@launchboard/domain`): domain types and controlled values, field/collection limits, strict calendar-date rules, tag and task normalization/validation, field predicates, the v2 backup envelope (v1/v2 import support) and shared versioned backup-record normalizer. Browser localStorage recovery remains frontend-only; ordinary server request validation remains strict.
 - Saved Views remain browser-local under `launchboard.views.v1`. They are preferences, not opportunity data, and do not justify a server table in the first backend implementation.
 
 ---
@@ -346,6 +348,25 @@ The composite foreign key enforces that a contact belongs to the same opportunit
 
 `UNIQUE (opportunity_id, public_id)`, `UNIQUE (opportunity_id, position)`, `INDEX (opportunity_id, date, position)`, check for the seven allowed activity types.
 
+### 4.9.1 `tasks` (added by migration 004)
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `BIGINT UNSIGNED` | PK, AUTO_INCREMENT |
+| `opportunity_id` | `BIGINT UNSIGNED` | NOT NULL, FK `opportunities(id)` ON DELETE CASCADE |
+| `public_id` | `VARCHAR(128)` | NOT NULL, `utf8mb4_bin`; unique within its opportunity |
+| `position` | `TINYINT UNSIGNED` | NOT NULL; CHECK 0–99 |
+| `title` | `VARCHAR(160)` | NOT NULL |
+| `notes` | `TEXT` | NOT NULL; application supplies empty string when absent |
+| `priority` | `VARCHAR(8)` | NOT NULL DEFAULT `'Medium'`, ASCII binary |
+| `due_date` | `DATE` | NULL; local date-only value |
+| `completed` | `TINYINT(1)` | NOT NULL DEFAULT 0 |
+| `completed_on` | `DATE` | NULL; local date-only value |
+
+Constraints: `UNIQUE (opportunity_id, public_id)`, `UNIQUE (opportunity_id, position)`, `INDEX (opportunity_id, completed, due_date, position)`, bounded position 0–99, priority enum and completion/date consistency CHECK. Tasks have no independent owner/revision; parent ownership and optimistic concurrency are inherited through the opportunity aggregate.
+
+Migration 004 is additive, authored and structurally tested on the v1.2 feature branch. It is **not applied** to the local or production database; those schemas remain at migrations 001–003 until a separately approved migration step.
+
 ### 4.10 `opportunity_deletions` (Undo batches)
 
 | Column | Type | Constraints |
@@ -414,7 +435,7 @@ Use `mysql2` with `dateStrings: true` (and explicit TIME formatting) so the driv
 - Do not fabricate historical `created_at`/`updated_at` for imported local records. Set both to the import time and `version = 1`.
 - Preserve valid `archivedAt`, `isDemo` and all nested IDs from a version-1 backup.
 - Preserve collection order by assigning `position` from the backup array order. Merge appends after the current maximum.
-- The version-1 backup does not contain audit metadata, so no schema-version bump is needed. A future backup v2 could add it, but v1 must remain importable.
+- Schema v1 does not contain server audit metadata. Schema v2 was introduced for the task collection, not to expose server audit fields; v1 remains importable.
 
 ---
 
@@ -435,12 +456,12 @@ A per-user `opportunity_revision` increments on every opportunity mutation. It i
 
 ### 6.2 Aggregate updates
 
-Interviews, contacts, materials, activities and tags are updated **as part of one opportunity aggregate transaction**. `PUT /api/opportunities/:id` replaces the aggregate's child collections in one transaction after a version check.
+Interviews, contacts, materials, activities, tasks and tags are updated **as part of one opportunity aggregate transaction**. `PUT /api/opportunities/:id` replaces the aggregate's child collections in one transaction after a version check. Task IDs are unique within the parent; API ownership is resolved through the parent rather than a client-supplied owner ID.
 
 Why this choice:
 
 - The current frontend already constructs complete opportunity candidates for every mutation.
-- Nested edits are small (max 25 records per collection) and rare.
+- Nested edits are small (max 25 records per legacy child collection and max 100 tasks) and rare.
 - One aggregate transaction avoids partial nested writes and keeps contact/interview references consistent.
 - Concurrent edits to the same opportunity produce a clear version conflict rather than silently merging or losing one side.
 
@@ -462,13 +483,13 @@ The server owns the automatic `Status changed` activity.
 
 ### 6.4 Locking and transaction rules
 
-- Single aggregate update: `SELECT … FOR UPDATE` the owned opportunity, verify version, validate the entire aggregate, replace tags/children/activities, update parent, increment `version` and `opportunity_revision`, commit.
+- Single aggregate update: `SELECT … FOR UPDATE` the owned opportunity, verify version, validate the entire aggregate, replace tags/children/tasks/activities, update parent, increment `version` and `opportunity_revision`, commit.
 - Bulk operations: sort requested public IDs, lock all rows in that deterministic order, verify every row (ownership, version, not deleted, required state), apply all changes, increment every affected version and the collection revision, commit. Any failure rolls back the whole batch.
 - Missing, wrong-owner or soft-deleted IDs are treated as `NOT_FOUND`. A batch with any such ID fails entirely.
 - Wrong archive mode, wrong status, or stale version fails the entire batch with `409 BULK_CONFLICT` and a per-ID reason.
 - Contact deletion inside an aggregate: validate that every remaining interview contact reference exists in the same opportunity. If the client removed a contact without clearing its references, reject `422 CONTACT_REFERENCE_INVALID`; do not silently repair on a normal write.
 - Opportunity delete: create an `opportunity_deletions` batch, set `deleted_at` and `deleted_batch_id` on the parent in one transaction. Children remain until purge; all reads hide them with the parent.
-- Hard delete (replace-import and 30-day purge): delete children explicitly in dependency order — activities, interviews, materials, contacts, tags — then the opportunity. Do not rely on cascade ordering while the interview→contact `RESTRICT` foreign key exists.
+- Hard delete (replace-import and 30-day purge): delete interviews first to satisfy the interview→contact `RESTRICT` foreign key, then tasks and remaining children, then the opportunity. The task table also has an `ON DELETE CASCADE` parent FK as a final integrity safeguard.
 - Undo deletion: lock the batch and its opportunities, verify ownership, `restored_at IS NULL`, and `expires_at > now`, clear the deletion fields, increment versions, commit. Expired or already-restored batches return `410 DELETION_EXPIRED` / `409 ALREADY_RESTORED`.
 - Import: validate the backup before the write transaction; then lock the user row, verify `expectedRevision` for replace, insert/skip/replace, increment `opportunity_revision`, commit. Dry-run performs validation and planning only.
 
@@ -476,8 +497,8 @@ The server owns the automatic `Status changed` activity.
 
 | Operation | One transaction must contain |
 |---|---|
-| Create opportunity | Parent insert, tags, all nested rows, activities, revision increment |
-| Update aggregate | Row lock, version check, child replacement, system-activity append, parent update, version/revision increment |
+| Create opportunity | Parent insert, tags, all nested rows including tasks, activities, revision increment |
+| Update aggregate | Row lock, version check, child/task replacement, system-activity append, parent update, version/revision increment |
 | Archive / restore | Row lock, version/state check, `archived_at` update, version/revision increment |
 | Delete (soft) | Row lock, version check, deletion-batch insert, `deleted_at`/batch update, revision increment |
 | Bulk archive/restore | All row locks and checks, all updates, all version increments, revision increment |
@@ -485,7 +506,7 @@ The server owns the automatic `Status changed` activity.
 | Bulk delete | All row locks/checks, one deletion batch, all soft deletes, revision increment |
 | Undo archive/restore | All row locks, expected archive-state checks, all reversals, version/revision increments |
 | Restore deletion | Batch and opportunity locks, expiry/ownership checks, all restores, version/revision increments |
-| Import merge/replace | User lock, revision check for replace, all inserts/skips/replacement, revision increment |
+| Import merge/replace | User lock, revision check for replace, all inserts/skips/replacement including task children, revision increment |
 | Export | Consistent read snapshot; no writes |
 
 ---
@@ -495,7 +516,7 @@ The server owns the automatic `Status changed` activity.
 ### 7.1 Conventions
 
 - Base path: `/api`.
-- JSON only. `Content-Type: application/json`. The server foundation uses one global `express.json({ limit: 6 * 1024 * 1024 })` transport limit: the 5 MiB version-1 backup limit plus 1 MiB for the import envelope and JSON string escaping. The future import handler must still enforce the 5 MiB backup limit after parsing. A later stage may split the limit by route if normal endpoints need a smaller cap.
+- JSON only. `Content-Type: application/json`. The server uses one global `express.json({ limit: 6 * 1024 * 1024 })` transport limit: the 5 MiB backup limit plus 1 MiB for the import envelope and JSON string escaping. The import handler enforces the 5 MiB backup limit after parsing. A later stage may split the limit by route if normal endpoints need a smaller cap.
 - Auth: session cookie on every private endpoint. Mutations also require `X-CSRF-Token`.
 - Ownership: every private query scoped to the session user.
 - Versioning: `If-Match: "<version>"` for single-record mutations; `expectedVersion` per item for bulk.
@@ -535,6 +556,7 @@ The server owns the automatic `Status changed` activity.
     "interviews": [],
     "contacts": [],
     "materials": [],
+    "tasks": [],
     "compensation": "",
     "description": "",
     "notes": "",
@@ -547,7 +569,7 @@ The server owns the automatic `Status changed` activity.
 }
 ```
 
-`archivedAt` is omitted when active; `isDemo` is omitted when false. Empty optional strings remain `''` to match the frontend model. `version` and audit timestamps are outside the `Opportunity` object so the version-1 backup format stays unchanged.
+`archivedAt` is omitted when active; `isDemo` is omitted when false. Empty optional strings remain `''` to match the frontend model. Normalized API Opportunity resources always include `tasks` (empty when none exist); server versions and audit timestamps are outside the object and JSON backup.
 
 ### 7.3 Authentication endpoints
 
@@ -607,14 +629,14 @@ All bulk endpoints are all-or-nothing and require the authenticated session, exa
 | Method | Path | Request | Success |
 |---|---|---|---|
 | POST | `/api/opportunities/import` | `{mode:"merge"\|"replace", backup, dryRun?, confirmReplace?, expectedRevision?}` | `200 ImportResult` |
-| GET | `/api/opportunities/export` | — | `200` version-1 backup envelope, `Content-Disposition: attachment` |
+| GET | `/api/opportunities/export` | — | `200` schema-v2 backup envelope, `Content-Disposition: attachment` |
 
-`backup` must be the existing version-1 envelope:
+`backup` accepts schema v1 for existing files and schema v2 for task-aware files. New exports use schema v2:
 
 ```json
 {
   "format": "launchboard-backup",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "exportedAt": "2026-10-27T10:00:00.000Z",
   "opportunities": []
 }
@@ -624,9 +646,9 @@ Rules:
 
 - Maximum 5 MiB and 20,000 records, matching the frontend.
 - Validate the envelope before parsing records. Invalid JSON/envelope/schema → `422 INVALID_BACKUP` with a specific `details.reason`.
-- Normalize each record with the shared `normalizeBackupOpportunityRecord` domain helper. Invalid records and duplicate IDs inside the backup are skipped and counted, not fatal. The browser version-1 file-import parser uses the same helper; browser localStorage recovery remains separate.
+- Normalize each record with the shared `normalizeBackupOpportunityRecord` domain helper, passing the envelope version. V1 records normalize tasks to `[]`; v2 task children are repaired by shared task rules. Invalid records and duplicate IDs inside the backup are skipped and counted, not fatal. The browser v1/v2 file-import parser uses the same helper; browser localStorage recovery remains separate.
 - `merge`: insert records whose `(user_id, public_id)` does not exist, including soft-deleted tombstones in the existence check; skip every existing ID so the unique key cannot be hit and a retry never overwrites data.
-- `replace`: requires `confirmReplace: true` and `expectedRevision` equal to the current collection revision. It hard-deletes every opportunity row owned by the user, including soft-deleted tombstones, in one transaction. Dependent rows are deleted in FK-safe order (interviews before contacts), then old deletion-batch records are cleared, and valid unique incoming records are inserted. This also invalidates any pending deletion Undo batches. A stale revision returns `409 STALE_REVISION`.
+- `replace`: requires `confirmReplace: true` and `expectedRevision` equal to the current collection revision. It hard-deletes every opportunity row owned by the user, including soft-deleted tombstones, in one transaction. Dependent rows are deleted in FK-safe order (interviews before contacts; task rows with the other children), then old deletion-batch records are cleared and valid unique incoming records, including task children, are inserted. This also invalidates any pending deletion Undo batches. A stale revision returns `409 STALE_REVISION`.
 - `dryRun: true` returns the same counts without writing and without changing `revision`.
 - `ImportResult`:
 
@@ -648,8 +670,8 @@ Rules:
 }
 ```
 
-- Export includes all non-deleted opportunities in collection order, with no `version`, `createdAt`, `updatedAt`, `deletedAt` or other server metadata. `exportedAt` is server UTC. The envelope and schema version do not change.
-- Do not accept the browser recovery raw string as a backup. Only a valid `launchboard-backup` v1 envelope is accepted. A user may manually save a raw payload as a `.json` file and import it only if it is genuinely a valid envelope.
+- Export includes all non-deleted opportunities in collection order, including open, completed and unscheduled tasks. It excludes `version`, `createdAt`, `updatedAt`, `deletedAt` and other server metadata. `exportedAt` is server UTC. New exports use schema v2.
+- Do not accept the browser recovery raw string as a backup. Only a valid `launchboard-backup` schema v1 or v2 envelope is accepted. A user may manually save a raw payload as a `.json` file and import it only if it is genuinely a valid envelope.
 
 ### 7.7 Error codes
 
@@ -693,16 +715,16 @@ Frontend handling:
 
 ## 8. Backup migration and recovery
 
-### 8.1 What a version-1 backup is
+### 8.1 Versioned backups (v2 export; v1/v2 import)
 
-The envelope is unchanged: `format: "launchboard-backup"`, `schemaVersion: 1`, `exportedAt`, `opportunities: Opportunity[]`. The server validates it exactly as the frontend does today:
+New backups use `format: "launchboard-backup"`, `schemaVersion: 2`, `exportedAt` and `opportunities: Opportunity[]`. The importer remains backward-compatible with schema v1 and validates version-specific task behavior consistently with the frontend:
 
 1. Reject input larger than 5 MiB (`413 PAYLOAD_TOO_LARGE`) before parsing.
 2. Parse JSON; failure → `422 INVALID_BACKUP` with `details.reason = "invalid-json"`.
 3. Require the exact format string, a numeric `schemaVersion`, and an `opportunities` array.
-4. Reject `schemaVersion !== 1` as `unsupported-schema`. Unknown newer versions are never guessed at.
+4. Accept only supported schema versions 1 and 2; any other version is `unsupported-schema`. Unknown versions are never guessed at.
 5. Reject more than 20,000 records as `too-many-records`.
-6. Run each record through the shared domain helper `normalizeBackupOpportunityRecord`, which applies the established backup repair semantics and server-safe public-ID limits. Count repaired, invalid and duplicate records instead of failing the whole file. The browser version-1 file-import parser now uses this same helper; browser localStorage recovery remains separate.
+6. Run each record through the shared domain helper `normalizeBackupOpportunityRecord`, passing the envelope version. V1 records normalize tasks to `[]`; v2 task children use shared normalization and repair. Count repaired, invalid and duplicate records instead of failing the whole file. The browser file-import parser uses this helper; browser localStorage recovery remains separate.
 7. Validate nested references after normalization: interview `contactId` must be `''` or an ID present in the same record's contacts. A dangling reference is repaired to `''` and counted as repaired, matching the current `repairInterviewContactReferences` behavior.
 
 `exportedAt` is advisory. It is never trusted as an audit timestamp and is never used to set `created_at`.
@@ -731,7 +753,7 @@ Both modes are all-or-nothing. A database failure during `replace` rolls back to
 The client keeps its local data until the server confirms success:
 
 1. Export or snapshot the local collection in memory.
-2. Optionally download a version-1 backup file as a safety copy.
+2. Optionally download a schema-v2 backup file as a safety copy.
 3. `POST /api/opportunities/import` with `dryRun: true` and show the counts (added / skipped / repaired / invalid).
 4. On confirmation, call the real import. `merge` is the default for a first migration; `replace` is offered only when the user explicitly chooses it.
 5. Persist the returned `revision` and reload the collection from `GET /api/opportunities`.
@@ -741,11 +763,11 @@ Retry is safe because `merge` is idempotent with respect to IDs: a retried merge
 
 ### 8.5 Server-side export
 
-`GET /api/opportunities/export` returns the unchanged version-1 envelope for all non-deleted opportunities in collection order. Server metadata (`version`, `createdAt`, `updatedAt`, `deletedAt`, `deletionBatchId`) is excluded, so the file round-trips through the existing frontend importer and through the server importer. `archivedAt` is exported as a UTC ISO string; `isDemo` is included only when true, matching current export behavior.
+`GET /api/opportunities/export` returns schema v2 for all non-deleted opportunities in collection order. It includes every task state (open, completed and unscheduled) and excludes server metadata (`version`, `createdAt`, `updatedAt`, `deletedAt`, `deletionBatchId`). V1 imports remain supported. `archivedAt` is exported as a UTC ISO string; `isDemo` is included only when true.
 
 ### 8.6 Browser recovery payloads
 
-`launchboard.recovery.raw.v1` is the exact unreadable localStorage string preserved for manual recovery. It is **not** a backup. The server must never accept arbitrary raw recovery text as a backup, and there is no "restore raw payload" endpoint. A user may only import it if they can produce a genuine valid `launchboard-backup` v1 envelope from it. This is an explicit non-goal.
+`launchboard.recovery.raw.v1` is the exact unreadable localStorage string preserved for manual recovery. It is **not** a backup. The server must never accept arbitrary raw recovery text as a backup, and there is no "restore raw payload" endpoint. A user may only import it if they can produce a genuine valid `launchboard-backup` v1 or v2 envelope from it. This is an explicit non-goal.
 
 `RecoveryViewState` and `repairedSaved` are browser-local presentation state. They have no server equivalent, are not exported, and are not part of the API contract. In server mode, a failed load is a normal request error, not a localStorage recovery scenario.
 
@@ -791,7 +813,7 @@ interface OpportunityRepository {
 
 ### 9.4 What stays reusable
 
-Extracted into `@launchboard/domain` and shared unchanged: domain types and enums, field and collection limits, calendar-date rules, tag normalization, URL/time/email predicates, the backup envelope and the version-1 backup-record normalizer. The browser file-import parser uses the shared backup normalizer. Browser localStorage recovery normalizers in `contacts.ts`, `interviews.ts`, `materials.ts`, `activities.ts`, `archive.ts` and `storage.ts` remain frontend-only. Filtering, calendar, global search, Saved Views and CSV formatting also remain frontend-only.
+Extracted into `@launchboard/domain` and shared unchanged: domain types and enums, field/collection limits, calendar-date and tag rules, task normalization/validation/classification, URL/time/email predicates, the v2 backup envelope with v1/v2 import support, and the version-aware backup-record normalizer. Browser localStorage recovery normalizers in `contacts.ts`, `interviews.ts`, `materials.ts`, `activities.ts`, `archive.ts` and `storage.ts` remain frontend-only. Filtering, calendar, global search, Saved Views and CSV formatting also remain frontend-only.
 
 The local adapter remains useful: it keeps unit and component tests fast, supports an offline/local mode, and acts as a reference implementation for the async contract. It implements the same async interface and returns synthetic versions.
 
@@ -810,7 +832,7 @@ Each stage must leave the existing frontend fully working. No stage may point th
 
 | # | Stage | Deliverable | Acceptance criteria |
 |---|---|---|---|
-| 1 | Shared domain extraction | Move pure types, enums, limits, date/tag/field rules, backup envelope and shared v1 backup-record normalizer into `packages/domain`; keep browser localStorage recovery normalizers frontend-only | Frontend tests still pass unchanged; the package builds; no duplicated rule implementations |
+| 1 | Shared domain extraction | Move pure types, enums, limits, date/tag/field/task rules, v2 backup envelope and version-aware v1/v2 backup normalizer into `packages/domain`; keep browser localStorage recovery normalizers frontend-only | Frontend tests pass; package builds; no duplicated rule implementations |
 | 2 | Backend foundation | `server/` package: Express app, TypeScript config, error middleware, request IDs, health/ready routes | `npm run build` and `npm run dev` work; `/api/health` returns 200; no database access yet |
 | 3 | Config and database connectivity | Env validation, `mysql2` pool, `time_zone='+00:00'`, connection check on `/api/ready` | Missing/invalid env fails fast with a clear message; no secret in source |
 | 4 | Schema and migrations | `launchboard` database, migration runner, all tables and constraints | Migrations run forward on a fresh database; no statement references `healthbridge` or `nova_home` |
@@ -818,7 +840,7 @@ Each stage must leave the existing frontend fully working. No stage may point th
 | 6 | Opportunity core API | User-scoped collection/single reads, create/update, soft delete, archive/restore, server versions and `If-Match` | Complete: focused mocked-database tests pass; cross-user access returns 404; stale writes return 409 without modifying records |
 | 7 | Nested workspaces and activities | Full interviews, contacts, materials, tags and user activities in the aggregate transaction; expand server-owned status history | Complete: focused mocked-database tests pass; child collections persist and load in order; contact references and immutable system activities are enforced; nested failures roll back the aggregate |
 | 8 | Bulk operations and Undo | Bulk archive/restore/status/delete, deletion batches, batch restore | Any bad item rolls back the whole batch; expired Undo returns 410 |
-| 9 | Import/export API | Version-1 server validation, export, merge, dry-run, revision-guarded atomic replace and documented local migration procedure | Focused mocked tests cover round-trip shape, repair/skip counts, idempotent merge, destructive replace guards and rollback; no local data is changed |
+| 9 | Import/export API | Versioned server validation (v1/v2 import; v2 export), merge, dry-run, revision-guarded atomic replace and documented local migration procedure | Focused mocked tests cover task round-trip, v1 compatibility, repair/skip counts, idempotent merge, destructive replace guards and rollback; no local data is changed |
 | 10 | Frontend integration and deployment | HttpOpportunityRepository, authenticated API-mode shell, session UI, explicit browser migration and backup adapters | Implemented and deployed. The local adapter remains the default; release verification is recorded in docs/deployment-readiness.md. |
 
 ### 10.1 Remaining API and data-policy decisions

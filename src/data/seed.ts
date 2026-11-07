@@ -12,6 +12,7 @@ export function seedOpportunities(): Opportunity[] {
     interviews: [] as Opportunity['interviews'],
     contacts: [] as Opportunity['contacts'],
     materials: [] as Opportunity['materials'],
+    tasks: [] as Opportunity['tasks'],
     compensation: '',
     description: '',
     notes: '',

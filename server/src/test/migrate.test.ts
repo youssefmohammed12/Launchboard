@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   checksumSql,
+  DEFAULT_MIGRATIONS_DIRECTORY,
   loadMigrations,
   MigrationError,
   runMigrations,
@@ -444,6 +445,37 @@ describe('initial schema and bootstrap invariants', () => {
     expect(provisioning).not.toMatch(/ON\s+\*\.\*/i);
     expect(provisioning).not.toMatch(/\bDROP\s+(TABLE|DATABASE|USER)\b/i);
     expect(provisioning).not.toMatch(/\bCREATE\s+DATABASE\b/i);
+  });
+});
+
+describe('opportunity task migration 004', () => {
+  const migrationPath = fileURLToPath(
+    new URL('../../database/migrations/004_opportunity_tasks.sql', import.meta.url),
+  );
+
+  it('is discovered after the existing migrations without connecting to a database', async () => {
+    const migrations = await loadMigrations(DEFAULT_MIGRATIONS_DIRECTORY);
+    expect(migrations.map((migration) => migration.version)).toEqual([
+      '001_initial_schema',
+      '002_auth_pre_sessions',
+      '003_email_verification_password_reset',
+      '004_opportunity_tasks',
+    ]);
+    expect(migrations[3]?.sql).toContain('CREATE TABLE tasks');
+  });
+
+  it('creates an opportunity-owned table with bounded ordering and completion invariants', () => {
+    const sql = readFileSync(migrationPath, 'utf8');
+    const statements = splitSqlStatements(sql);
+    expect(statements).toHaveLength(1);
+    expect(sql).toContain('UNIQUE KEY uq_tasks_opportunity_public_id (opportunity_id, public_id)');
+    expect(sql).toContain('UNIQUE KEY uq_tasks_opportunity_position (opportunity_id, `position`)');
+    expect(sql).toContain('FOREIGN KEY (opportunity_id) REFERENCES opportunities (id) ON DELETE CASCADE');
+    expect(sql).toContain('CHECK (`position` BETWEEN 0 AND 99)');
+    expect(sql).toContain("CHECK (priority IN ('Low', 'Medium', 'High'))");
+    expect(sql).toContain('(completed = 1 AND completed_on IS NOT NULL)');
+    expect(sql).toContain('(completed = 0 AND completed_on IS NULL)');
+    expect(sql).not.toMatch(/DROP\s+(TABLE|DATABASE)|healthbridge|nova_home/i);
   });
 });
 

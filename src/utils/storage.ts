@@ -17,6 +17,7 @@ import { isValidISODate } from './dates';
 import { normalizeStoredInterviews, sameStoredInterviews } from './interviews';
 import { normalizeStoredMaterials, sameStoredMaterials } from './materials';
 import { normalizeStoredTags } from './opportunities';
+import { normalizeTaskList } from '@launchboard/domain';
 
 const KEY = 'launchboard.opportunities.v1';
 export const RECOVERY_KEY = 'launchboard.recovery.raw.v1';
@@ -156,6 +157,7 @@ export function normalizeOpportunityRecord(value: unknown): NormalizedOpportunit
   const activities = normalizeStoredActivities(o.activities);
   const contacts = normalizeStoredContacts(o.contacts);
   const materials = normalizeStoredMaterials(o.materials);
+  const normalizedTasks = normalizeTaskList(o.tasks);
   const interviews = repairInterviewContactReferences(
     normalizeStoredInterviews(o.interviews),
     contacts,
@@ -176,6 +178,7 @@ export function normalizeOpportunityRecord(value: unknown): NormalizedOpportunit
     !sameStoredInterviews(o.interviews, interviews) ||
     !sameStoredContacts(o.contacts, contacts) ||
     !sameStoredMaterials(o.materials, materials) ||
+    normalizedTasks.repaired ||
     o.compensation !== compensation ||
     o.description !== description ||
     o.notes !== notes ||
@@ -198,6 +201,7 @@ export function normalizeOpportunityRecord(value: unknown): NormalizedOpportunit
       interviews,
       contacts,
       materials,
+      tasks: normalizedTasks.tasks,
       compensation,
       description,
       notes,

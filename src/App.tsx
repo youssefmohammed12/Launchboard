@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import ApiModeApp from './ApiModeApp';
 import {
+  addOpportunityTask,
+  completeOpportunityTask,
+  deleteOpportunityTask,
+  reopenOpportunityTask,
+  updateOpportunityTask,
+  type TaskDraft,
+} from '@launchboard/domain';
+import {
   SYSTEM_ACTIVITY_TYPE,
   type ActivityDraft,
   type ContactDraft,
@@ -46,6 +54,8 @@ import {
   type RestoreOutcome,
 } from './utils/backup';
 import { createId } from './utils/id';
+import { toISODate } from './utils/dates';
+import { commitLocalTaskMutation, type TaskCollectionMutation } from './data/taskOperations';
 import { SAVE_FAILURE_MESSAGE } from './utils/mutationMessages';
 import { downloadRecoveryPayload } from './utils/exports';
 import { resolveBulkDeleteTargets } from './utils/opportunities';
@@ -76,6 +86,7 @@ import { Opportunities } from './pages/Opportunities';
 import { Calendar } from './pages/Calendar';
 import { Deadlines } from './pages/Deadlines';
 import { Reports } from './pages/Reports';
+import { ActionCenter, type TaskFocusTarget } from './pages/ActionCenter';
 
 // Only one dialog is open at a time.
 type Dialog =
@@ -125,6 +136,7 @@ interface ArchiveNotice {
 
 function LocalStorageApp() {
   const [view, setView] = useState<View>('dashboard');
+  const [pendingTaskFocus, setPendingTaskFocus] = useState<TaskFocusTarget | null>(null);
   const {
     items,
     recovery,
@@ -265,6 +277,10 @@ function LocalStorageApp() {
   const navigate = (next: View) => {
     setView(next);
     setArchiveNotice(null);
+  };
+  const openTaskInActionCenter = (opportunityId: string, taskId: string) => {
+    setPendingTaskFocus({ opportunityId, taskId });
+    navigate('action-center');
   };
   // The trigger is stored explicitly so focus can be restored to it later.
   const openDetails = (item: Opportunity, trigger?: HTMLElement | null) => {
@@ -448,6 +464,7 @@ function LocalStorageApp() {
               interviews: current.interviews,
               contacts: current.contacts,
               materials: current.materials,
+              tasks: current.tasks,
             }
           : o,
       );
@@ -461,6 +478,7 @@ function LocalStorageApp() {
           interviews: [],
           contacts: [],
           materials: [],
+          tasks: [],
         },
       ];
     }
@@ -925,6 +943,45 @@ function LocalStorageApp() {
     }));
   };
 
+  const runLocalTaskMutation = async (
+    opportunityId: string,
+    mutate: TaskCollectionMutation,
+  ): Promise<boolean> => {
+    const result = commitLocalTaskMutation(items, opportunityId, mutate, commit);
+    if (!result.ok) {
+      const message = result.issues?.[0]?.message ?? (
+        result.reason === 'limit-reached'
+          ? 'This opportunity already has the maximum of 100 tasks.'
+          : result.reason === 'save-failed'
+            ? SAVE_FAILURE_MESSAGE
+            : result.reason === 'opportunity-not-found'
+              ? 'This opportunity is no longer available. Refresh the workspace and try again.'
+              : 'The task could not be changed. Review it and try again.'
+      );
+      setArchiveNotice({ kind: 'error', message });
+      return false;
+    }
+    setArchiveNotice(null);
+    return true;
+  };
+
+  const handleCreateTask = (opportunityId: string, draft: TaskDraft) =>
+    runLocalTaskMutation(opportunityId, (tasks) => addOpportunityTask(tasks, draft, createId()));
+
+  const handleUpdateTask = (opportunityId: string, taskId: string, draft: TaskDraft) =>
+    runLocalTaskMutation(opportunityId, (tasks) => updateOpportunityTask(tasks, taskId, draft));
+
+  const handleCompleteTask = (opportunityId: string, taskId: string) =>
+    runLocalTaskMutation(opportunityId, (tasks) =>
+      completeOpportunityTask(tasks, taskId, toISODate(new Date())),
+    );
+
+  const handleReopenTask = (opportunityId: string, taskId: string) =>
+    runLocalTaskMutation(opportunityId, (tasks) => reopenOpportunityTask(tasks, taskId));
+
+  const handleDeleteTask = (opportunityId: string, taskId: string) =>
+    runLocalTaskMutation(opportunityId, (tasks) => deleteOpportunityTask(tasks, taskId));
+
   // Confirmation copy must describe the records that are still eligible at
   // render time, not just the IDs the page sent.
   const bulkArchiveTargets =
@@ -1007,6 +1064,8 @@ function LocalStorageApp() {
             items={items}
             onAdd={openAdd}
             onOpen={openDetails}
+            onOpenTask={openTaskInActionCenter}
+            onOpenActionCenter={() => navigate('action-center')}
             onOpenCalendar={() => navigate('calendar')}
           />
         )}
@@ -1025,7 +1084,21 @@ function LocalStorageApp() {
             onBulkDelete={openBulkDelete}
           />
         )}
-        {view === 'calendar' && <Calendar items={items} onOpen={openDetails} />}
+        {view === 'action-center' && (
+          <ActionCenter
+            items={items}
+            focusTaskTarget={pendingTaskFocus}
+            onTaskFocusHandled={() => setPendingTaskFocus(null)}
+            error={archiveNotice?.kind === 'error' ? archiveNotice.message : null}
+            onOpen={openDetails}
+            onCreate={handleCreateTask}
+            onUpdate={handleUpdateTask}
+            onComplete={handleCompleteTask}
+            onReopen={handleReopenTask}
+            onDelete={handleDeleteTask}
+          />
+        )}
+        {view === 'calendar' && <Calendar items={items} onOpen={openDetails} onOpenTask={openTaskInActionCenter} />}
         {view === 'deadlines' && <Deadlines items={items} onOpen={openDetails} />}
         {view === 'reports' && (
           <Reports items={items} onOpen={openDetails} onRestoreBackup={openRestore} />

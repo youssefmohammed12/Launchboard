@@ -35,6 +35,7 @@ function makeResource(overrides: Partial<Opportunity> = {}): OpportunityResource
       interviews: [],
       contacts: [],
       materials: [],
+      tasks: [],
       compensation: '',
       description: '',
       notes: '',

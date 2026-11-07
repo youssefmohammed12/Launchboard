@@ -59,6 +59,7 @@ export const validOpportunity = {
   interviews: [validInterview],
   contacts: [validContact],
   materials: [validMaterial],
+  tasks: [],
   compensation: '',
   description: '',
   notes: '',

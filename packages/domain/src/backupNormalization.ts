@@ -14,6 +14,8 @@ import {
   type MaterialEntry,
   type Opportunity,
 } from './opportunity.js';
+import { BACKUP_SCHEMA_VERSION } from './backup.js';
+import { normalizeTaskList } from './tasks.js';
 import {
   MAX_CONTACTS,
   MAX_CONTACT_EMAIL_LENGTH,
@@ -293,14 +295,17 @@ function sameMaterials(raw: unknown, normalized: MaterialEntry[]): boolean {
 }
 
 /**
- * Applies the shared server-safe repair policy for version-1 backup records.
+ * Applies the shared server-safe repair policy for versioned backup records.
  * It mirrors the browser importer's field-repair rules while enforcing database
  * public-ID bounds and first-wins child IDs. The Stage 10 browser adapter will
  * consume this helper so both import paths use one implementation. Required
  * parent identity/title/type fields cannot be safely invented; malformed child
  * entries and optional fields are repaired independently so valid siblings survive.
  */
-export function normalizeBackupOpportunityRecord(value: unknown): NormalizedBackupRecord {
+export function normalizeBackupOpportunityRecord(
+  value: unknown,
+  schemaVersion: number = BACKUP_SCHEMA_VERSION,
+): NormalizedBackupRecord {
   const record = asRecord(value);
   if (!record) return { opportunity: null, repaired: false, failure: 'not-an-object' };
 
@@ -329,6 +334,10 @@ export function normalizeBackupOpportunityRecord(value: unknown): NormalizedBack
   const activities = normalizeActivities(record.activities);
   const contacts = normalizeContacts(record.contacts);
   const materials = normalizeMaterials(record.materials);
+  // Version 1 predates tasks and must never import an unversioned task field.
+  const normalizedTasks = normalizeTaskList(
+    schemaVersion === 1 ? undefined : record.tasks,
+  );
   const availableContactIds = new Set(contacts.map((contact) => contact.id));
   const interviews = normalizeInterviews(record.interviews).map((interview) =>
     interview.contactId && !availableContactIds.has(interview.contactId)
@@ -351,6 +360,11 @@ export function normalizeBackupOpportunityRecord(value: unknown): NormalizedBack
     !sameInterviews(record.interviews, interviews) ||
     !sameContacts(record.contacts, contacts) ||
     !sameMaterials(record.materials, materials) ||
+    normalizedTasks.repaired ||
+    (schemaVersion === 1 &&
+      record.tasks !== undefined &&
+      (!Array.isArray(record.tasks) || record.tasks.length > 0)) ||
+    (schemaVersion !== 1 && record.tasks === undefined) ||
     record.compensation !== compensation ||
     record.description !== description ||
     record.notes !== notes ||
@@ -373,6 +387,7 @@ export function normalizeBackupOpportunityRecord(value: unknown): NormalizedBack
       interviews,
       contacts,
       materials,
+      tasks: normalizedTasks.tasks,
       compensation,
       description,
       notes,

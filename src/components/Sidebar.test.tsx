@@ -13,7 +13,7 @@ describe('Sidebar', () => {
     );
 
     const nav = screen.getByRole('navigation', { name: 'Primary navigation' });
-    expect(within(nav).getAllByRole('button')).toHaveLength(5);
+    expect(within(nav).getAllByRole('button')).toHaveLength(6);
     expect(within(nav).getByRole('button', { name: 'Dashboard' })).toHaveAttribute(
       'aria-current',
       'page',
@@ -21,6 +21,23 @@ describe('Sidebar', () => {
     expect(within(nav).getByRole('button', { name: 'Opportunities' })).not.toHaveAttribute(
       'aria-current',
     );
+    expect(within(nav).getByRole('button', { name: 'Actions' })).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  it('navigates to the Action Center destination', () => {
+    const onNavigate = vi.fn();
+    render(
+      <Sidebar
+        current="dashboard"
+        onNavigate={onNavigate}
+        onSearch={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }));
+    expect(onNavigate).toHaveBeenCalledWith('action-center');
   });
 
   it('preserves the global search trigger and its keyboard shortcut hint', () => {

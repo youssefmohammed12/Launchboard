@@ -153,6 +153,28 @@ describe('live schema evaluation', () => {
   });
 });
 
+describe('v1.2 Action Center schema evaluation', () => {
+  it('requires the tasks table, its columns, indexes and opportunity ownership foreign key', () => {
+    const failures = evaluateSchema(snapshot({
+      tables: [{
+        name: 'tasks',
+        engine: 'InnoDB',
+        collation: 'utf8mb4_unicode_ci',
+        rowFormat: 'Dynamic',
+      }],
+    }));
+
+    expect(failures).not.toContain('missing table tasks');
+    expect(failures).toContain('missing column tasks.id');
+    expect(failures).toContain('missing column tasks.public_id');
+    expect(failures).toContain('missing column tasks.completed_on');
+    expect(failures).toContain('missing index tasks.PRIMARY');
+    expect(failures).toContain('missing index tasks.uq_tasks_opportunity_public_id');
+    expect(failures).toContain('missing index tasks.uq_tasks_opportunity_position');
+    expect(failures).toContain('missing foreign key tasks.fk_tasks_opportunity');
+  });
+});
+
 describe('pre-auth schema evaluation', () => {
   it('requires the auth_pre_sessions table definition and all three indexes', () => {
     const failures = evaluateSchema(snapshot({

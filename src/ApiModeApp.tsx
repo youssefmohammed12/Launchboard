@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from './hooks/useAuth';
+import {
+  addOpportunityTask,
+  completeOpportunityTask,
+  deleteOpportunityTask,
+  reopenOpportunityTask,
+  updateOpportunityTask,
+  type TaskDraft,
+} from '@launchboard/domain';
 import { AuthScreen } from './components/AuthScreen';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { LocalMigrationDialog } from './components/LocalMigrationDialog';
@@ -14,6 +22,7 @@ import { Opportunities } from './pages/Opportunities';
 import { Calendar } from './pages/Calendar';
 import { Deadlines } from './pages/Deadlines';
 import { Reports } from './pages/Reports';
+import { ActionCenter, type TaskFocusTarget } from './pages/ActionCenter';
 import {
   SYSTEM_ACTIVITY_TYPE,
   type ActivityDraft,
@@ -36,6 +45,7 @@ import {
   type VersionedOpportunityRef,
 } from './data/httpOpportunityRepository';
 import { ApiRequestError } from './data/apiClient';
+import { commitApiTaskMutation, type TaskCollectionMutation } from './data/taskOperations';
 import { getLocalMigrationMarker } from './data/localMigration';
 import { createId } from './utils/id';
 import { toISODate } from './utils/dates';
@@ -179,6 +189,7 @@ export default function ApiModeApp() {
   const [detailsOpener, setDetailsOpener] = useState<HTMLElement | null>(null);
   const [detailsFocusTarget, setDetailsFocusTarget] = useState<DetailsFocusTarget | null>(null);
   const [view, setView] = useState<View>('opportunities');
+  const [pendingTaskFocus, setPendingTaskFocus] = useState<TaskFocusTarget | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchOpener, setSearchOpener] = useState<HTMLElement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<OpportunityResource | null>(null);
@@ -310,6 +321,7 @@ export default function ApiModeApp() {
           interviews: [],
           contacts: [],
           materials: [],
+          tasks: [],
         };
         const created = await repository.create(opportunity);
         setCollection((current) => replaceResource(current, created));
@@ -592,6 +604,62 @@ export default function ApiModeApp() {
     }
   }
 
+  async function runApiTaskMutation(
+    opportunityId: string,
+    mutate: TaskCollectionMutation,
+  ): Promise<boolean> {
+    if (!userId || mutationLock.current) return false;
+    mutationLock.current = true;
+    setMutationBusy(true);
+    setMutationError(null);
+    try {
+      const result = await commitApiTaskMutation(repository, opportunityId, mutate);
+      if (!result.ok) {
+        setMutationError(result.issues?.[0]?.message ?? (
+          result.reason === 'limit-reached'
+            ? 'This opportunity already has the maximum of 100 tasks.'
+            : result.reason === 'not-found'
+              ? 'This task no longer exists. The workspace has not been changed.'
+              : 'The task could not be changed. Review it and try again.'
+        ));
+        return false;
+      }
+      setCollection((current) => replaceResource(current, result.resource));
+      return true;
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 409) {
+        await loadCollection();
+        setMutationError('This opportunity changed while you were editing the task. The latest version was reloaded; review it and try again.');
+      } else if (error instanceof ApiRequestError && error.status === 401) {
+        await auth.refresh();
+        setMutationError('Your session needs to be refreshed before this task can be changed.');
+      } else {
+        setMutationError(messageFor(error));
+      }
+      return false;
+    } finally {
+      mutationLock.current = false;
+      setMutationBusy(false);
+    }
+  }
+
+  const handleCreateTask = (opportunityId: string, draft: TaskDraft) =>
+    runApiTaskMutation(opportunityId, (tasks) => addOpportunityTask(tasks, draft, createId()));
+
+  const handleUpdateTask = (opportunityId: string, taskId: string, draft: TaskDraft) =>
+    runApiTaskMutation(opportunityId, (tasks) => updateOpportunityTask(tasks, taskId, draft));
+
+  const handleCompleteTask = (opportunityId: string, taskId: string) =>
+    runApiTaskMutation(opportunityId, (tasks) =>
+      completeOpportunityTask(tasks, taskId, toISODate(new Date())),
+    );
+
+  const handleReopenTask = (opportunityId: string, taskId: string) =>
+    runApiTaskMutation(opportunityId, (tasks) => reopenOpportunityTask(tasks, taskId));
+
+  const handleDeleteTask = (opportunityId: string, taskId: string) =>
+    runApiTaskMutation(opportunityId, (tasks) => deleteOpportunityTask(tasks, taskId));
+
   async function changeArchiveFromDetails(id: string): Promise<ArchiveOperationResult> {
     if (mutationLock.current) {
       return { ok: false, message: 'Another server update is already running.' };
@@ -773,6 +841,11 @@ export default function ApiModeApp() {
     setDetailsOpener(trigger ?? null);
     setDetailsFocusTarget(null);
     setDetailsId(item.id);
+  };
+
+  const openTaskInActionCenter = (opportunityId: string, taskId: string) => {
+    setPendingTaskFocus({ opportunityId, taskId });
+    setView('action-center');
   };
 
   const openBackupImport = (trigger?: HTMLElement | null) => {
@@ -1062,6 +1135,8 @@ export default function ApiModeApp() {
                 items={items}
                 onAdd={openAdd}
                 onOpen={openDetails}
+                onOpenTask={openTaskInActionCenter}
+                onOpenActionCenter={() => setView('action-center')}
                 onOpenCalendar={() => setView('calendar')}
               />
             )}
@@ -1084,7 +1159,22 @@ export default function ApiModeApp() {
                 onBulkDelete={openBulkDelete}
               />
             )}
-            {view === 'calendar' && <Calendar items={items} onOpen={openDetails} />}
+            {view === 'action-center' && (
+              <ActionCenter
+                items={items}
+                focusTaskTarget={pendingTaskFocus}
+                onTaskFocusHandled={() => setPendingTaskFocus(null)}
+                busy={mutationBusy}
+                error={mutationError}
+                onOpen={openDetails}
+                onCreate={handleCreateTask}
+                onUpdate={handleUpdateTask}
+                onComplete={handleCompleteTask}
+                onReopen={handleReopenTask}
+                onDelete={handleDeleteTask}
+              />
+            )}
+            {view === 'calendar' && <Calendar items={items} onOpen={openDetails} onOpenTask={openTaskInActionCenter} />}
             {view === 'deadlines' && <Deadlines items={items} onOpen={openDetails} />}
             {view === 'reports' && (
               <Reports

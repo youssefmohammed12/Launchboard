@@ -228,6 +228,7 @@ export function parseOpportunityCsv(input: string): CsvImportResult {
       interviews: interviews as Opportunity['interviews'],
       contacts: contacts as Opportunity['contacts'],
       materials: materials as Opportunity['materials'],
+      tasks: [],
     });
   }
 

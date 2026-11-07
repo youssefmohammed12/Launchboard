@@ -197,6 +197,17 @@ describe('opportunity aggregate API — Stage 6', () => {
       if (sql.includes('SELECT opportunity_revision')) return [[{ opportunity_revision: 12 }], []];
       if (sql.includes('SELECT o.*')) return [[row()], []];
       if (sql.includes('FROM activities') && sql.includes('IN (')) return [[activity], []];
+      if (sql.includes('FROM tasks') && sql.includes('IN (')) return [[{
+        opportunity_id: 41,
+        public_id: 'task-list-1',
+        title: 'Submit application follow-up',
+        notes: '',
+        priority: 'Medium',
+        due_date: '2026-11-09',
+        completed: 0,
+        completed_on: null,
+        position: 0,
+      }], []];
       return [[], []];
     });
 
@@ -224,6 +235,15 @@ describe('opportunity aggregate API — Stage 6', () => {
           interviews: [],
           contacts: [],
           materials: [],
+          tasks: [{
+            id: 'task-list-1',
+            title: 'Submit application follow-up',
+            notes: '',
+            priority: 'Medium',
+            dueDate: '2026-11-09',
+            completed: false,
+            completedOn: '',
+          }],
         },
         version: 3,
         createdAt: '2026-10-30T10:00:00.000Z',
@@ -281,6 +301,11 @@ describe('opportunity aggregate API — Stage 6', () => {
         public_id: 'material-1', label: 'Resume', kind: 'Resume', url: '',
         version: 'v2', status: 'Ready', notes: '',
       }], []];
+      if (sql.includes('FROM tasks')) return [[{
+        public_id: 'task-1', title: 'Prepare for interview', notes: 'Review role',
+        priority: 'High', due_date: '2026-11-08', completed: 0,
+        completed_on: null, position: 0,
+      }], []];
       return [[], []];
     });
 
@@ -298,6 +323,15 @@ describe('opportunity aggregate API — Stage 6', () => {
       });
       expect(body.opportunity.contacts[0]).toMatchObject({ id: 'contact-1', name: 'Jordan Lee' });
       expect(body.opportunity.materials[0]).toMatchObject({ id: 'material-1', version: 'v2' });
+      expect(body.opportunity.tasks).toEqual([{
+        id: 'task-1',
+        title: 'Prepare for interview',
+        notes: 'Review role',
+        priority: 'High',
+        dueDate: '2026-11-08',
+        completed: false,
+        completedOn: '',
+      }]);
       expect(body.opportunity.activities[0].id).toBe('activity-status-1');
     });
   });
@@ -392,8 +426,17 @@ describe('opportunity aggregate API — Stage 6', () => {
       return [[], []];
     });
 
+    const task = {
+      id: 'task-1',
+      title: 'Prepare for interview',
+      notes: 'Review role',
+      priority: 'High',
+      dueDate: '2026-11-08',
+      completed: false,
+      completedOn: '',
+    };
     await withTestServer(app(), async (baseUrl) => {
-      const response = await postCreate(baseUrl, createBody({ id: 'nested-test' }));
+      const response = await postCreate(baseUrl, createBody({ id: 'nested-test', tasks: [task] }));
       const body = await response.json() as any;
       const sql = connection.execute.mock.calls.map(([statement]) => String(statement));
 
@@ -405,6 +448,14 @@ describe('opportunity aggregate API — Stage 6', () => {
       expect(sql.some((statement) => statement.includes('INSERT INTO interviews'))).toBe(true);
       expect(sql.some((statement) => statement.includes('INSERT INTO materials'))).toBe(true);
       expect(sql.some((statement) => statement.includes('INSERT INTO activities'))).toBe(true);
+      expect(sql.some((statement) => statement.includes('INSERT INTO tasks'))).toBe(true);
+      const taskInsert = connection.execute.mock.calls.find(([statement]) =>
+        String(statement).includes('INSERT INTO tasks'),
+      );
+      expect(taskInsert?.[1]).toEqual([
+        99, 'task-1', 0, 'Prepare for interview', 'Review role', 'High',
+        '2026-11-08', 0, null,
+      ]);
       expect(sql.findIndex((statement) => statement.includes('INSERT INTO contacts')))
         .toBeLessThan(sql.findIndex((statement) => statement.includes('INSERT INTO interviews')));
     });
@@ -550,6 +601,15 @@ describe('opportunity aggregate API — Stage 6', () => {
     const currentSystemActivity = { ...statusActivity, public_id: 'system-1' };
     const nestedUpdate = updateBody({
       tags: ['Remote', 'React'],
+      tasks: [{
+        id: 'task-updated',
+        title: 'Send follow-up',
+        notes: '',
+        priority: 'Medium',
+        dueDate: '2026-11-10',
+        completed: false,
+        completedOn: '',
+      }],
       activities: [
         { id: 'system-1', type: 'Status changed', date: '2026-10-30', note: 'Status changed from Saved to Applied.' },
         { id: 'user-activity-1', type: 'Recruiter contacted', date: '2026-10-31', note: 'Sent a follow-up.' },
@@ -583,6 +643,8 @@ describe('opportunity aggregate API — Stage 6', () => {
       expect(sql.some((statement) => statement.includes('INSERT INTO opportunity_tags'))).toBe(true);
       expect(sql.some((statement) => statement.includes('INSERT INTO materials'))).toBe(true);
       expect(sql.some((statement) => statement.includes('INSERT INTO activities'))).toBe(true);
+      expect(sql.some((statement) => statement.includes('DELETE FROM tasks WHERE opportunity_id = ?'))).toBe(true);
+      expect(sql.some((statement) => statement.includes('INSERT INTO tasks'))).toBe(true);
       const activityInsert = connection.execute.mock.calls.find(([statement]) =>
         String(statement).includes('INSERT INTO activities'),
       );
@@ -590,6 +652,124 @@ describe('opportunity aggregate API — Stage 6', () => {
         41, 'system-1', 0, 'Status changed', '2026-10-30',
         'Status changed from Saved to Applied.',
       ]);
+    });
+  });
+
+  it('persists task create, complete, reopen and delete through successive parent versions', async () => {
+    let parentVersion = 3;
+    let storedTasks: Array<{
+      public_id: string;
+      title: string;
+      notes: string;
+      priority: string;
+      due_date: string | null;
+      completed: number;
+      completed_on: string | null;
+      position: number;
+    }> = [];
+    const systemActivityInput = {
+      id: 'activity-status-1',
+      type: 'Status changed',
+      date: '2026-10-30',
+      note: 'Status changed from Saved to Applied.',
+    };
+
+    setExecuteHandler(async (sql, params) => {
+      if (sql.includes('SELECT *') && sql.includes('FROM opportunities')) {
+        return [[row({ version: parentVersion })], []];
+      }
+      if (sql.includes('FROM activities') && sql.includes('WHERE opportunity_id = ?')) {
+        return [[statusActivity], []];
+      }
+      if (sql.includes('DELETE FROM tasks WHERE opportunity_id = ?')) {
+        storedTasks = [];
+        return [{ affectedRows: 1 }, []];
+      }
+      if (sql.includes('FROM tasks') && sql.includes('WHERE opportunity_id = ?')) {
+        return [storedTasks.map((task) => ({ ...task })), []];
+      }
+      if (sql.includes('INSERT INTO tasks')) {
+        storedTasks.push({
+          public_id: String(params[1]),
+          position: Number(params[2]),
+          title: String(params[3]),
+          notes: String(params[4]),
+          priority: String(params[5]),
+          due_date: params[6] as string | null,
+          completed: Number(params[7]),
+          completed_on: params[8] as string | null,
+        });
+        return [{ affectedRows: 1 }, []];
+      }
+      if (sql.includes('UPDATE opportunities')) {
+        parentVersion += 1;
+        return [{ affectedRows: 1 }, []];
+      }
+      if (sql.includes('UPDATE users SET opportunity_revision')) {
+        return [{ affectedRows: 1 }, []];
+      }
+      return [[], []];
+    });
+
+    await withTestServer(app(), async (baseUrl) => {
+      const task = {
+        id: 'task-lifecycle',
+        title: 'Prepare for interview',
+        notes: 'Review the role',
+        priority: 'High',
+        dueDate: '2026-11-09',
+        completed: false,
+        completedOn: '',
+      };
+
+      const createdResponse = await putUpdate(baseUrl, emptyChildUpdate({
+        activities: [systemActivityInput],
+        tasks: [task],
+      }), 3);
+      const created = await createdResponse.json() as any;
+      expect(createdResponse.status).toBe(200);
+      expect(created.version).toBe(4);
+      expect(created.opportunity.tasks).toEqual([task]);
+
+      const completedTask = {
+        ...task,
+        completed: true,
+        completedOn: '2026-11-07',
+      };
+      const completedResponse = await putUpdate(baseUrl, emptyChildUpdate({
+        activities: [systemActivityInput],
+        tasks: [completedTask],
+      }), 4);
+      const completed = await completedResponse.json() as any;
+      expect(completedResponse.status).toBe(200);
+      expect(completed.version).toBe(5);
+      expect(completed.opportunity.tasks).toEqual([completedTask]);
+
+      const reopenedTask = {
+        ...task,
+        completed: false,
+        completedOn: '',
+      };
+      const reopenedResponse = await putUpdate(baseUrl, emptyChildUpdate({
+        activities: [systemActivityInput],
+        tasks: [reopenedTask],
+      }), 5);
+      const reopened = await reopenedResponse.json() as any;
+      expect(reopenedResponse.status).toBe(200);
+      expect(reopened.version).toBe(6);
+      expect(reopened.opportunity.tasks).toEqual([reopenedTask]);
+
+      const deletedResponse = await putUpdate(baseUrl, emptyChildUpdate({
+        activities: [systemActivityInput],
+        tasks: [],
+      }), 6);
+      const deleted = await deletedResponse.json() as any;
+      expect(deletedResponse.status).toBe(200);
+      expect(deleted.version).toBe(7);
+      expect(deleted.opportunity.tasks).toEqual([]);
+      expect(storedTasks).toEqual([]);
+      expect(connection.commit).toHaveBeenCalledTimes(4);
+      expect(connection.rollback).not.toHaveBeenCalled();
     });
   });
 
@@ -601,14 +781,25 @@ describe('opportunity aggregate API — Stage 6', () => {
       }
       if (sql.includes('INSERT INTO opportunities')) return [{ affectedRows: 1, insertId: 99 }, []];
       if (sql.includes('SELECT *') && sql.includes('FROM opportunities')) return [[row({ id: 99, public_id: 'nested-failure' })], []];
-      if (sql.includes('INSERT INTO contacts')) {
+      if (sql.includes('INSERT INTO tasks')) {
         throw Object.assign(new Error('private nested insert failure'), { code: 'ER_DATA_TOO_LONG' });
       }
       return [[], []];
     });
 
     await withTestServer(app(), async (baseUrl) => {
-      const response = await postCreate(baseUrl, createBody({ id: 'nested-failure' }));
+      const response = await postCreate(baseUrl, createBody({
+        id: 'nested-failure',
+        tasks: [{
+          id: 'task-fail',
+          title: 'This child insert will fail',
+          notes: '',
+          priority: 'Low',
+          dueDate: '',
+          completed: false,
+          completedOn: '',
+        }],
+      }));
       const text = await response.text();
 
       expect(response.status).toBe(503);

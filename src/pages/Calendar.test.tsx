@@ -16,9 +16,13 @@ function sectionByHeading(name: string | RegExp): HTMLElement {
   return section as HTMLElement;
 }
 
-function renderCalendar(items: Opportunity[], onOpen = vi.fn()) {
-  render(<Calendar items={items} onOpen={onOpen} />);
-  return onOpen;
+function renderCalendar(
+  items: Opportunity[],
+  onOpen = vi.fn(),
+  onOpenTask = vi.fn(),
+) {
+  render(<Calendar items={items} onOpen={onOpen} onOpenTask={onOpenTask} />);
+  return { onOpen, onOpenTask };
 }
 
 describe('Calendar page', () => {
@@ -284,7 +288,7 @@ describe('Calendar page', () => {
       title: 'Frontend Intern',
       deadline: '2026-01-15',
     });
-    const onOpen = renderCalendar([item]);
+    const { onOpen } = renderCalendar([item]);
 
     const eventButton = within(sectionByHeading('Selected day')).getByRole('button', {
       name: /Open Frontend Intern for deadline on Jan 15, 2026/,
@@ -343,3 +347,60 @@ describe('Calendar page', () => {
     expect(within(agenda).queryByText(/overdue/i)).not.toBeInTheDocument();
   });
 });
+
+  it('shows dated open tasks in a distinct Tasks filter and opens the task action context', () => {
+    const item = makeOpportunity({
+      id: 'task-opportunity',
+      title: 'Frontend Intern',
+      company: 'Northwind Labs',
+      tasks: [
+        {
+          id: 'prepare-cv',
+          title: 'Tailor my CV',
+          notes: '',
+          priority: 'High',
+          dueDate: '2026-01-15',
+          completed: false,
+          completedOn: '',
+        },
+        {
+          id: 'completed',
+          title: 'Completed task',
+          notes: '',
+          priority: 'Low',
+          dueDate: '2026-01-15',
+          completed: true,
+          completedOn: '2026-01-15',
+        },
+        {
+          id: 'unscheduled',
+          title: 'Unscheduled task',
+          notes: '',
+          priority: 'Medium',
+          dueDate: '',
+          completed: false,
+          completedOn: '',
+        },
+      ],
+    });
+    const onOpen = vi.fn();
+    const onOpenTask = vi.fn();
+    renderCalendar([item], onOpen, onOpenTask);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tasks' }));
+    expect(screen.getByRole('button', { name: 'Tasks' })).toHaveAttribute('aria-pressed', 'true');
+
+    const agenda = sectionByHeading('Selected day');
+    const taskButton = within(agenda).getByRole('button', {
+      name: 'Open task Tailor my CV for Frontend Intern on Jan 15, 2026',
+    });
+    expect(within(taskButton).getByText('Task')).toBeInTheDocument();
+    expect(within(taskButton).getByText('High priority')).toBeInTheDocument();
+    expect(within(taskButton).getByText('Task due today')).toBeInTheDocument();
+    expect(within(agenda).queryByText('Completed task')).not.toBeInTheDocument();
+    expect(within(agenda).queryByText('Unscheduled task')).not.toBeInTheDocument();
+
+    fireEvent.click(taskButton);
+    expect(onOpenTask).toHaveBeenCalledWith('task-opportunity', 'prepare-cv', taskButton);
+    expect(onOpen).not.toHaveBeenCalled();
+  });

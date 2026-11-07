@@ -16,6 +16,9 @@ import {
   MAX_MATERIAL_LABEL_LENGTH,
   MAX_MATERIAL_NOTES_LENGTH,
   MAX_TAGS,
+  MAX_TASKS,
+  MAX_TASK_NOTES_LENGTH,
+  MAX_TASK_TITLE_LENGTH,
   OPPORTUNITY_STATUSES,
   OPPORTUNITY_TYPES,
   PRIORITIES,
@@ -272,6 +275,44 @@ describe('opportunity create/update schemas', () => {
         createBody({ interviews, contacts, materials, tags }),
       ).success,
     ).toBe(true);
+  });
+
+  it('validates task fields, completion invariants, duplicate IDs and collection limits', () => {
+    const validTask = {
+      id: 'task-1',
+      title: 'Prepare for interview',
+      notes: 'Review the job description',
+      priority: 'High',
+      dueDate: '2026-11-08',
+      completed: false,
+      completedOn: '',
+    };
+    expect(createOpportunityBodySchema.safeParse(createBody({ tasks: [validTask] })).success)
+      .toBe(true);
+    expect(createOpportunityBodySchema.safeParse(createBody({
+      tasks: [{ ...validTask, completed: true, completedOn: '2026-11-07' }],
+    })).success).toBe(true);
+
+    for (const task of [
+      { ...validTask, id: '   ' },
+      { ...validTask, title: '   ' },
+      { ...validTask, title: 'x'.repeat(MAX_TASK_TITLE_LENGTH + 1) },
+      { ...validTask, notes: 'x'.repeat(MAX_TASK_NOTES_LENGTH + 1) },
+      { ...validTask, priority: 'Urgent' },
+      { ...validTask, dueDate: '2026-02-30' },
+      { ...validTask, completed: true },
+      { ...validTask, completedOn: '2026-11-07' },
+    ]) {
+      expectCreateRejected({ tasks: [task] });
+    }
+
+    expectCreateRejected({ tasks: [validTask, { ...validTask }] });
+    expectCreateRejected({
+      tasks: Array.from({ length: MAX_TASKS + 1 }, (_, index) => ({
+        ...validTask,
+        id: `task-${index}`,
+      })),
+    });
   });
 
   it('validates interview contact references inside the aggregate', () => {

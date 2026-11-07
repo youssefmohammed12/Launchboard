@@ -9,7 +9,7 @@ import { LAUNCHBOARD_DATABASE } from '../config/env.js';
 import { DEFAULT_MIGRATIONS_DIRECTORY, loadMigrations } from './migrate.js';
 import { acquireUtcConnection } from './pool.js';
 
-/** Every table the initial migration is expected to create. */
+/** Every table expected in the current Launchboard schema. */
 export const REQUIRED_TABLES = [
   'users',
   'sessions',
@@ -21,6 +21,7 @@ export const REQUIRED_TABLES = [
   'interviews',
   'materials',
   'activities',
+  'tasks',
   'schema_migrations',
 ] as const;
 
@@ -431,6 +432,46 @@ export function evaluateSchema(snapshot: SchemaSnapshot): string[] {
     nullable: true,
   });
   expectColumn('activities', 'date', { dataType: 'date', nullable: false });
+  expectColumn('tasks', 'id', {
+    dataType: 'bigint',
+    unsigned: true,
+    autoIncrement: true,
+    nullable: false,
+  });
+  expectColumn('tasks', 'opportunity_id', {
+    dataType: 'bigint',
+    unsigned: true,
+    nullable: false,
+  });
+  expectColumn('tasks', 'public_id', {
+    dataType: 'varchar',
+    charLength: 128,
+    collation: 'utf8mb4_bin',
+    nullable: false,
+  });
+  expectColumn('tasks', 'position', {
+    dataType: 'tinyint',
+    unsigned: true,
+    nullable: false,
+  });
+  expectColumn('tasks', 'title', {
+    dataType: 'varchar',
+    charLength: 160,
+    nullable: false,
+  });
+  expectColumn('tasks', 'notes', { dataType: 'text', nullable: false });
+  expectColumn('tasks', 'priority', {
+    dataType: 'varchar',
+    charLength: 8,
+    collation: 'ascii_bin',
+    nullable: false,
+  });
+  expectColumn('tasks', 'due_date', { dataType: 'date', nullable: true });
+  expectColumn('tasks', 'completed', {
+    dataType: 'tinyint',
+    nullable: false,
+  });
+  expectColumn('tasks', 'completed_on', { dataType: 'date', nullable: true });
   expectColumn('schema_migrations', 'version', {
     dataType: 'varchar',
     charLength: 50,
@@ -483,6 +524,21 @@ export function evaluateSchema(snapshot: SchemaSnapshot): string[] {
   expectIndex('activities', 'uq_activities_opportunity_public_id', true, [
     'opportunity_id',
     'public_id',
+  ]);
+  expectIndex('tasks', 'PRIMARY', true, ['id']);
+  expectIndex('tasks', 'uq_tasks_opportunity_public_id', true, [
+    'opportunity_id',
+    'public_id',
+  ]);
+  expectIndex('tasks', 'uq_tasks_opportunity_position', true, [
+    'opportunity_id',
+    'position',
+  ]);
+  expectIndex('tasks', 'idx_tasks_opportunity_due', false, [
+    'opportunity_id',
+    'completed',
+    'due_date',
+    'position',
   ]);
   expectIndex('schema_migrations', 'PRIMARY', true, ['version']);
 
@@ -555,6 +611,14 @@ export function evaluateSchema(snapshot: SchemaSnapshot): string[] {
   expectForeignKey(
     'activities',
     'fk_activities_opportunity',
+    ['opportunity_id'],
+    'opportunities',
+    ['id'],
+    'CASCADE',
+  );
+  expectForeignKey(
+    'tasks',
+    'fk_tasks_opportunity',
     ['opportunity_id'],
     'opportunities',
     ['id'],

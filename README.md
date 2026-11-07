@@ -29,7 +29,8 @@
 - **Manage opportunities:** create, edit, search, filter, sort, and switch between list and board views.
 - **Keep applications organized:** track status, priority, deadlines, follow-up dates, compensation, tags, and notes.
 - **Manage the full workspace:** attach interviews, contacts, application materials, and activity history to each opportunity.
-- **Plan your time:** use the calendar and deadlines views to see upcoming and overdue items.
+- **Plan your next actions:** manage opportunity-linked tasks in the Action Center with priorities, optional due dates, completion, and clear overdue/upcoming groups.
+- **Stay on top of work:** see overdue and due-today tasks on the Dashboard and dated open tasks in Calendar, without mixing them with deadlines or interviews.
 - **Review progress:** view reports and export your records.
 - **Find anything quickly:** use global search with `Ctrl + K` (or `Cmd + K` on macOS).
 - **Work safely with your data:** archive and restore records, use bulk actions with Undo, import CSV files, and create or restore full JSON backups.
@@ -41,7 +42,8 @@
 | --- | --- |
 | Dashboard | Active pipeline overview, next-seven-days summary, and recent opportunities |
 | Opportunities | List/board views, filters, saved views, archive/restore, bulk actions, and Undo |
-| Calendar | Derived calendar of deadlines, follow-ups, and interview events |
+| Action Center | Opportunity-linked tasks grouped by due date and completion state |
+| Calendar | Deadlines, follow-ups, interviews, and a distinct filter for dated open tasks |
 | Deadlines | Focused view of upcoming and overdue deadlines |
 | Reports | Pipeline metrics, CSV export, and CSV/JSON import |
 
@@ -67,7 +69,7 @@ Launchboard has two intentionally separate persistence modes:
 
 The default app stores opportunity data in this browser's `localStorage`. It does not require an account or a running backend, and data is not automatically shared between browsers or devices.
 
-Export a JSON backup regularly. JSON is the full-fidelity backup format and preserves archived records and nested workspace data.
+Export a JSON backup regularly. JSON is the full-fidelity backup format and preserves archived records, nested workspace data, and opportunity-linked tasks.
 
 ### Authenticated API workspace (opt-in)
 

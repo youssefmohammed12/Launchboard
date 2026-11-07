@@ -1,5 +1,5 @@
 
-import { SYSTEM_ACTIVITY_TYPE } from '@launchboard/domain';
+import { SYSTEM_ACTIVITY_TYPE, type TaskEntry } from '@launchboard/domain';
 import type { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { randomUUID } from 'node:crypto';
 import { parseUtcDateTime } from '../auth/time.js';
@@ -93,6 +93,18 @@ interface MaterialRow extends RowDataPacket {
   notes: string;
 }
 
+interface TaskRow extends RowDataPacket {
+  opportunity_id?: number | string;
+  public_id: string;
+  title: string;
+  notes: string;
+  priority: string;
+  due_date: string | null;
+  completed: number | string | boolean;
+  completed_on: string | null;
+  position: number | string;
+}
+
 interface RevisionRow extends RowDataPacket {
   opportunity_revision: number | string;
 }
@@ -140,6 +152,7 @@ export interface OpportunityResource {
       id: string; label: string; kind: string; url: string;
       version: string; status: string; notes: string;
     }>;
+    tasks: TaskEntry[];
     compensation: string;
     description: string;
     notes: string;
@@ -191,6 +204,7 @@ interface OpportunityChildren {
   interviews: readonly InterviewRow[];
   contacts: readonly ContactRow[];
   materials: readonly MaterialRow[];
+  tasks: readonly TaskRow[];
 }
 
 function mapOpportunity(
@@ -247,6 +261,15 @@ function mapOpportunity(
         status: material.status,
         notes: material.notes,
       })),
+      tasks: children.tasks.map((task) => ({
+        id: task.public_id,
+        title: task.title,
+        notes: task.notes,
+        priority: task.priority as TaskEntry['priority'],
+        dueDate: task.due_date ?? '',
+        completed: task.completed === true || task.completed === 1 || task.completed === '1',
+        completedOn: task.completed_on ?? '',
+      })),
       compensation: row.compensation,
       description: row.description,
       notes: row.notes,
@@ -299,6 +322,7 @@ async function replaceNestedCollections(
 ): Promise<void> {
   // Delete dependent records in the contract's safe order. Interviews
   // reference contacts with ON DELETE RESTRICT, so they must go first.
+  await connection.execute('DELETE FROM tasks WHERE opportunity_id = ?', [opportunityId]);
   await connection.execute('DELETE FROM activities WHERE opportunity_id = ?', [opportunityId]);
   await connection.execute('DELETE FROM interviews WHERE opportunity_id = ?', [opportunityId]);
   await connection.execute('DELETE FROM materials WHERE opportunity_id = ?', [opportunityId]);
@@ -338,6 +362,13 @@ async function replaceNestedCollections(
       [opportunityId, activity.id, position, activity.type, activity.date, activity.note],
     );
   }
+  for (const [position, task] of input.tasks.entries()) {
+    await connection.execute(
+      'INSERT INTO tasks (opportunity_id, public_id, `position`, title, notes, priority, due_date, completed, completed_on) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [opportunityId, task.id, position, task.title, task.notes, task.priority,
+        dbDate(task.dueDate), task.completed ? 1 : 0, dbDate(task.completedOn)],
+    );
+  }
 }
 
 async function selectChildren(
@@ -361,7 +392,11 @@ async function selectChildren(
     'SELECT public_id, label, `kind`, `url`, `version`, status, notes FROM materials WHERE opportunity_id = ? ORDER BY `position`',
     [opportunityId],
   );
-  return { tags, activities, interviews, contacts, materials };
+  const [tasks] = await connection.execute<TaskRow[]>(
+    'SELECT public_id, title, notes, priority, due_date, completed, completed_on, `position` FROM tasks WHERE opportunity_id = ? ORDER BY `position`',
+    [opportunityId],
+  );
+  return { tags, activities, interviews, contacts, materials, tasks };
 }
 
 async function selectChildrenForCollection(
@@ -392,9 +427,13 @@ async function selectChildrenForCollection(
     'SELECT opportunity_id, public_id, label, `kind`, `url`, `version`, status, notes FROM materials WHERE opportunity_id IN (' + placeholders + ') ORDER BY opportunity_id, `position`',
     ids,
   );
+  const [tasks] = await connection.execute<TaskRow[]>(
+    'SELECT opportunity_id, public_id, title, notes, priority, due_date, completed, completed_on, `position` FROM tasks WHERE opportunity_id IN (' + placeholders + ') ORDER BY opportunity_id, `position`',
+    ids,
+  );
   for (const opportunity of opportunities) {
     grouped.set(String(opportunity.id), {
-      tags: [], activities: [], interviews: [], contacts: [], materials: [],
+      tags: [], activities: [], interviews: [], contacts: [], materials: [], tasks: [],
     });
   }
   for (const [rows, key] of [
@@ -403,6 +442,7 @@ async function selectChildrenForCollection(
     [interviews, 'interviews'],
     [contacts, 'contacts'],
     [materials, 'materials'],
+    [tasks, 'tasks'],
   ] as const) {
     for (const child of rows) {
       const target = grouped.get(String(child.opportunity_id));
