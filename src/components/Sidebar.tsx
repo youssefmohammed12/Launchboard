@@ -57,7 +57,7 @@ export function Sidebar({
         <kbd>Ctrl K</kbd>
       </button>
 
-      <nav className="lb-primary-nav" aria-label="Main">
+      <nav className="lb-primary-nav" aria-label="Primary navigation">
         <span className="lb-nav-caption">WORKSPACE</span>
         <ul className="lb-nav-list">
           {ITEMS.map(({ view, label, icon: Icon }) => (

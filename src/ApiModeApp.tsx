@@ -7,6 +7,7 @@ import { OpportunityForm } from './components/OpportunityForm';
 import { DetailsDialog } from './components/DetailsDialog';
 import { ApiBackupImportDialog } from './components/ApiBackupImportDialog';
 import { Sidebar } from './components/Sidebar';
+import { MobileAccountMenu } from './components/MobileAccountMenu';
 import { GlobalSearchDialog } from './components/GlobalSearchDialog';
 import { Dashboard } from './pages/Dashboard';
 import { Opportunities } from './pages/Opportunities';
@@ -968,6 +969,12 @@ export default function ApiModeApp() {
             >
               Sign out
             </button>
+            <MobileAccountMenu
+              email={auth.state.user.email}
+              disabled={auth.busy || mutationBusy}
+              onMigrate={() => setShowMigration(true)}
+              onSignOut={() => void auth.signOut()}
+            />
           </div>
         </header>
 

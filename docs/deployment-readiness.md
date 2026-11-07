@@ -2,12 +2,12 @@
 
 ## Current production deployment
 
-Last checked: **4 November 2026**.
+Last checked: **7 November 2026**.
 
 - Application: [https://launchboard-drab.vercel.app](https://launchboard-drab.vercel.app)
 - Hosting: Vercel Hobby, Node.js 24.x, Frankfurt region (`fra1`).
 - Database: TiDB Cloud Serverless, database `launchboard`.
-- Latest production deployment: `dpl_Fed9L1WuwYxQ1asTkCC5DFNLiN3K` (READY; includes the new SVG favicon).
+- Latest production deployment: `dpl_BR1qNU1KCzYXmVyUayhv9c3DZ6qC` (READY; responsive UI polish release, 7 November 2026).
 - The UI redesign, CSV import, API-mode integration, and current authentication presentation are included in the deployed application.
 
 The 4 November favicon release used the existing prebuilt deployment workflow and reused the API function bundle unchanged. The frontend production build passed with 1,633 modules. Live smoke verified the canonical homepage, `/favicon.svg` (HTTP 200, `image/svg+xml`, SHA-256 matching the local SVG), generated JS/CSS assets, redesign markers, `/api/health`, and `/api/ready`; readiness returned `db=ok`. No database migrations, environment-variable changes, opportunity-record changes, authentication tests, or CRUD tests were performed.
@@ -68,3 +68,15 @@ The `deployment/` directory retains the scripts used for manual prebuilt release
 - Registration and account-action email delivery depend on Gmail SMTP configuration. Gmail is a low-volume sender.
 - Rate limiting currently uses an in-memory store. A shared store is required before running multiple API instances.
 - Treat the deployment as a personal portfolio/demo application until operational monitoring, abuse controls, and independent security review meet the needs of its intended audience.
+
+
+## Responsive UI production release — 7 November 2026
+
+- **Deployment:** `dpl_BR1qNU1KCzYXmVyUayhv9c3DZ6qC` — `READY`, production target, Node.js 24.x, Frankfurt (`fra1`).
+- **Deployment URL:** `https://launchboard-6fe5ifp3d-youssef-workplace.vercel.app`.
+- **Assigned production aliases:** `https://launchboard-drab.vercel.app` and `https://launchboard-youssef-workplace.vercel.app`.
+- **Build:** local Vite production build with `VITE_DATA_MODE=api`; TypeScript clean and Vite 6.4.5 transformed 1,634 modules. Rebuilt the catch-all API handler for the Node 24 runtime and uploaded the prebuilt package without creating a Git commit.
+- **Static artifact verification:** canonical production `index.html`, `favicon.svg`, JavaScript and CSS returned HTTP 200; exact sizes and SHA-1 hashes matched the local uploaded release manifest. The secondary production alias homepage also returned HTTP 200.
+- **Live application checks:** `deployment/release-ui-smoke.mjs` passed. `/api/health` returned HTTP 200 (`status=ok`); `/api/ready` returned HTTP 200 (`status=ok`, `db=ok`).
+- **Observability:** no Vercel runtime errors were found in the post-deployment 15-minute scan, and no error/fatal log entries were returned for that interval. A previous `DEP0169` Node.js `url.parse()` deprecation warning was observed before this release; it was not an application exception.
+- No database migration, environment-variable update, project-setting change, authentication test, production CRUD test, commit or push was performed. Previously user-tested auth and CRUD flows were intentionally not repeated for this presentation-only release.

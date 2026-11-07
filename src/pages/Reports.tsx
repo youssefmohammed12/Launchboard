@@ -203,16 +203,19 @@ export function Reports({
             A snapshot of your active opportunities and recent activity. Archived records are
             excluded from these totals.
           </p>
-          <p className="m-0 text-[0.8rem] text-muted">
-            CSV is intended for spreadsheets and tabular analysis and can be imported here.
-            JSON backup preserves the complete opportunity records, nested activity history,
-            interviews, contacts, application materials and valid contact links. Both exports
-            include archived records, but CSV does not include archive state or every nested
-            collection; use JSON for a full-fidelity restore.
-          </p>
-          <p className="m-0 mt-s1 text-[0.78rem] text-muted">
-            {backupStorageDescription}
-          </p>
+          <details className="lb-report-export-help">
+            <summary>About CSV and JSON exports</summary>
+            <div className="lb-report-export-help-content">
+              <p>
+                CSV is intended for spreadsheets and tabular analysis and can be imported here.
+                JSON backup preserves complete opportunity records, nested activity history,
+                interviews, contacts, application materials and valid contact links. Both exports
+                include archived records, but CSV does not preserve archive state or every nested
+                collection; use JSON for a full-fidelity restore.
+              </p>
+              <p>{backupStorageDescription}</p>
+            </div>
+          </details>
         </div>
         <div className="flex flex-wrap gap-s2" role="group" aria-label="Import and export data">
           <button

@@ -125,7 +125,7 @@ describe('ApiModeApp', () => {
     expect(screen.getByText('Your workspace is up to date')).toBeInTheDocument();
     expect(screen.getByText(/opportunities tracked · revision 7/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add opportunity' })).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeInTheDocument();
     expect(mocks.load).toHaveBeenCalledWith('all');
   });
 
@@ -798,7 +798,7 @@ describe('ApiModeApp', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Calendar' }));
     expect(await screen.findByRole('heading', { name: 'Calendar' })).toBeInTheDocument();
 
-    fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'Deadlines' }));
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Primary navigation' })).getByRole('button', { name: 'Deadlines' }));
     expect(await screen.findByRole('heading', { name: 'Deadlines' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Reports' }));

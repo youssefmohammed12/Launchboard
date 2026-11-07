@@ -55,6 +55,10 @@ export function OpportunityBoard({
   const [dragOverStatus, setDragOverStatus] = useState<OpportunityStatus | null>(null);
   /** Restores keyboard focus to the moved card's selector when it changes columns. */
   const [focusAfterMove, setFocusAfterMove] = useState<string | null>(null);
+  const [selectedMobileStatus, setSelectedMobileStatus] = useState<OpportunityStatus>(
+    () => OPPORTUNITY_STATUSES.find((status) => items.some((item) => item.status === status))
+      ?? OPPORTUNITY_STATUSES[0],
+  );
 
   useEffect(() => {
     if (!focusAfterMove) return;
@@ -97,10 +101,33 @@ export function OpportunityBoard({
 
   return (
     <>
-      <p className="mb-s3 text-[0.85rem] text-muted">
-        Drag cards between columns, or use the status selector on each card.
+      <p className="lb-board-instructions mb-s3 text-[0.85rem] text-muted">
+        Use each card’s status selector to move an opportunity. Drag and drop is available on larger screens.
       </p>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-s3">
+      <div className="lb-board-mobile-selector" role="group" aria-label="Filter board by status">
+        {OPPORTUNITY_STATUSES.map((status) => {
+          const count = items.filter((item) => item.status === status).length;
+          return (
+            <button
+              key={status}
+              type="button"
+              className="lb-board-mobile-selector-button"
+              aria-label={status + ': ' + count + ' ' + (count === 1 ? 'opportunity' : 'opportunities')}
+              aria-pressed={selectedMobileStatus === status}
+              onClick={() => setSelectedMobileStatus(status)}
+            >
+              <span>{status}</span>
+              <strong aria-hidden="true">{count}</strong>
+            </button>
+          );
+        })}
+      </div>
+      <div
+        className="lb-board-columns grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-s3"
+        role="group"
+        aria-label="Opportunity status columns"
+        data-selected-status={selectedMobileStatus}
+      >
         {OPPORTUNITY_STATUSES.map((status) => {
           const columnItems = items.filter((o) => o.status === status);
           const headingId = `board-column-${status}`;
@@ -110,6 +137,7 @@ export function OpportunityBoard({
             <section
               key={status}
               aria-labelledby={headingId}
+              data-board-status={status}
               className={`flex min-h-[150px] flex-col rounded-card border bg-table-head ${
                 isDropTarget ? 'border-accent ring-2 ring-accent/25' : 'border-border'
               }`}

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { makeOpportunity } from '../test/fixtures';
 import { OpportunityBoard } from './OpportunityBoard';
@@ -36,5 +36,23 @@ describe('OpportunityBoard', () => {
     renderBoard([], true);
 
     expect(screen.getAllByText('No matching opportunities.')).toHaveLength(5);
+  });
+
+  it('lets a phone user choose one labelled status lane and see its count', () => {
+    renderBoard([makeOpportunity({ status: 'Applied' })]);
+
+    const selector = screen.getByRole('group', { name: 'Filter board by status' });
+    const interview = within(selector).getByRole('button', {
+      name: 'Interview: 0 opportunities',
+    });
+
+    expect(interview).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(interview);
+
+    expect(interview).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('group', { name: 'Opportunity status columns' })).toHaveAttribute(
+      'data-selected-status',
+      'Interview',
+    );
   });
 });

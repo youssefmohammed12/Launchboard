@@ -77,7 +77,7 @@ const selectClass =
   'w-auto rounded-control border border-border bg-surface px-s3 py-[9px] text-inherit [font:inherit] max-[640px]:w-full max-[640px]:grow max-[640px]:shrink max-[640px]:basis-full';
 
 const iconButtonClass =
-  'inline-grid h-[34px] w-[34px] cursor-pointer place-items-center rounded-control border-0 bg-transparent text-muted hover:bg-accent-soft hover:text-accent-dark';
+  'lb-opportunity-icon-action inline-grid h-[34px] w-[34px] cursor-pointer place-items-center rounded-control border-0 bg-transparent text-muted hover:bg-accent-soft hover:text-accent-dark';
 
 const tableHeadCellClass =
   'border-b border-border bg-table-head px-s4 py-s3 text-left text-[0.78rem] uppercase tracking-[0.04em] text-muted';
@@ -92,12 +92,6 @@ const actionsCellClass =
   'whitespace-nowrap border-b border-border px-s4 py-s3 text-right max-[640px]:mt-s2 max-[640px]:flex max-[640px]:justify-end max-[640px]:gap-s3 max-[640px]:border-b-0 max-[640px]:border-t max-[640px]:border-border max-[640px]:px-0 max-[640px]:pt-s2 max-[640px]:pb-s1 max-[640px]:before:content-none';
 
 const checkboxClass = 'h-4 w-4 cursor-pointer accent-[#2f7f79]';
-
-const selectCellClass =
-  'w-10 border-b border-border px-s4 py-s3 text-left align-top max-[640px]:block max-[640px]:w-auto max-[640px]:border-b-0 max-[640px]:px-0 max-[640px]:py-s1';
-
-const selectHeadCellClass =
-  'w-10 border-b border-border bg-table-head px-s4 py-s3 text-left max-[640px]:flex max-[640px]:w-auto max-[640px]:items-center max-[640px]:gap-s2 max-[640px]:border-0 max-[640px]:bg-transparent max-[640px]:px-0 max-[640px]:pt-0 max-[640px]:pb-s2';
 
 const bulkToolbarClass =
   'mb-s4 flex flex-wrap items-center gap-s2 rounded-card border border-border bg-surface p-s3 shadow-card';
@@ -507,11 +501,11 @@ export function Opportunities({
         visible.length === 0 ? (
           emptyState
         ) : (
-          <div className="overflow-x-auto rounded-card border border-border bg-surface shadow-card max-[640px]:overflow-visible max-[640px]:rounded-none max-[640px]:border-0 max-[640px]:bg-transparent max-[640px]:shadow-none">
-            <table className="w-full border-collapse max-[640px]:block">
+          <div className="lb-opportunity-list-wrapper overflow-x-auto rounded-card border border-border bg-surface shadow-card max-[640px]:overflow-visible max-[640px]:rounded-none max-[640px]:border-0 max-[640px]:bg-transparent max-[640px]:shadow-none">
+            <table className="lb-opportunity-list-table w-full border-collapse max-[640px]:block">
               <thead className="max-[640px]:block">
                 <tr className="max-[640px]:flex max-[640px]:items-center">
-                  <th scope="col" className={selectHeadCellClass}>
+                  <th scope="col" className={tableHeadCellClass + ' lb-opportunity-heading-cell'}>
                     <input
                       ref={masterRef}
                       type="checkbox"
@@ -520,9 +514,9 @@ export function Opportunities({
                       checked={allVisibleSelected}
                       onChange={(e) => toggleAllVisible(e.target.checked)}
                     />
+                    <span className="max-[640px]:hidden">Opportunity</span>
                     <span className="hidden max-[640px]:inline">Select all</span>
                   </th>
-                  <th scope="col" className={`${tableHeadCellClass} max-[640px]:hidden`}>Opportunity</th>
                   <th scope="col" className={`${tableHeadCellClass} max-[640px]:hidden`}>Company</th>
                   <th scope="col" className={`${tableHeadCellClass} max-[640px]:hidden`}>Type / Priority</th>
                   <th scope="col" className={`${tableHeadCellClass} max-[640px]:hidden`}>Status</th>
@@ -539,18 +533,23 @@ export function Opportunities({
                     key={o.id}
                     className={`${tableRowClass} ${selectedIds.has(o.id) ? 'bg-accent-soft/40' : ''}`}
                   >
-                    <td className={selectCellClass}>
-                      <input
-                        type="checkbox"
-                        className={checkboxClass}
-                        aria-label={`Select ${o.title}`}
-                        checked={selectedIds.has(o.id)}
-                        onChange={(e) => toggleSelected(o.id, e.target.checked)}
-                      />
-                    </td>
-                    <td data-label="Opportunity" className={tableCellClass}>
-                      <strong>{o.title}</strong> {archiveView === 'archived' && <ArchivedBadge />}{' '}
-                      {o.isDemo && <DemoTag />}
+                    <td data-label="Opportunity" className={tableCellClass + ' lb-opportunity-title-cell'}>
+                      <div className="lb-opportunity-title-content">
+                        <label className="lb-opportunity-select-control">
+                          <input
+                            type="checkbox"
+                            className={checkboxClass + ' lb-opportunity-row-checkbox'}
+                            aria-label={'Select ' + o.title}
+                            checked={selectedIds.has(o.id)}
+                            onChange={(e) => toggleSelected(o.id, e.target.checked)}
+                          />
+                          <span>Select</span>
+                        </label>
+                        <div className="lb-opportunity-title-copy">
+                          <strong>{o.title}</strong> {archiveView === 'archived' && <ArchivedBadge />}{' '}
+                          {o.isDemo && <DemoTag />}
+                        </div>
+                      </div>
                     </td>
                     <td data-label="Company" className={tableCellClass}>{o.company}</td>
                     <td data-label="Type / Priority" className={tableCellClass}>
@@ -588,7 +587,7 @@ export function Opportunities({
                         )}
                       </div>
                     </td>
-                    <td className={actionsCellClass}>
+                    <td data-label="Actions" className={actionsCellClass}>
                       <button
                         type="button"
                         className={iconButtonClass}

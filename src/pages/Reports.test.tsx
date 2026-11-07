@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { makeActivity, makeOpportunity } from '../test/fixtures';
 import { Reports } from './Reports';
@@ -63,6 +63,27 @@ describe('Reports', () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]).toHaveTextContent('Active Role');
     expect(screen.queryByText('Archived Role')).not.toBeInTheDocument();
+  });
+
+  it('keeps export details available in a disclosure instead of expanding the page header', () => {
+    render(
+      <Reports
+        items={[]}
+        onOpen={noop}
+        onRestoreBackup={noop}
+        backupStorageDescription="Export files stay in your browser."
+      />,
+    );
+
+    const summary = screen.getByText('About CSV and JSON exports');
+    const details = summary.closest('details') as HTMLDetailsElement;
+
+    expect(details.open).toBe(false);
+    fireEvent.click(summary);
+    expect(details.open).toBe(true);
+    expect(screen.getByText(/CSV is intended for spreadsheets/)).toBeInTheDocument();
+    expect(screen.getByText(/JSON backup preserves complete opportunity records/)).toBeInTheDocument();
+    expect(screen.getByText('Export files stay in your browser.')).toBeInTheDocument();
   });
 
   it('orders recent activity by activity date, newest first', () => {

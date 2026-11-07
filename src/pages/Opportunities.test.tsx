@@ -69,6 +69,15 @@ describe('Opportunities selection', () => {
     expect(toolbar()).toBeNull();
   });
 
+  it('places each selection checkbox inside its matching opportunity cell', () => {
+    setup();
+
+    const checkbox = rowCheckbox('Alpha Role');
+    const opportunityCell = screen.getByText('Alpha Role').closest('td');
+
+    expect(opportunityCell).toContainElement(checkbox);
+  });
+
   it('selects individual rows by stable ID and reports the count', () => {
     const { props } = setup();
 
