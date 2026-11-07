@@ -7,7 +7,8 @@ Last checked: **7 November 2026**.
 - Application: [https://launchboard-drab.vercel.app](https://launchboard-drab.vercel.app)
 - Hosting: Vercel Hobby, Node.js 24.x, Frankfurt region (`fra1`).
 - Database: TiDB Cloud Serverless, database `launchboard`.
-- Latest production deployment: `dpl_BoUMH49zoDQc8WtjZbG8FcR6oZKD` (READY; Action Center v1.2.0 release, 7 November 2026).
+- Latest production deployment: `dpl_HTXGyoJghytWohG7dTEXFuY9d2iF` (READY; Action Center v1.2.0 release, 7 November 2026).
+- Latest deployment URL: `https://launchboard-ddxzys8vy-youssef-workplace.vercel.app`.
 - The current production application includes opportunity-linked tasks, Action Center, Dashboard Today's Focus, Calendar task events, responsive UI, CSV import and authenticated API integration.
 
 The 4 November favicon release used the existing prebuilt deployment workflow and reused the API function bundle unchanged. The frontend production build passed with 1,633 modules. Live smoke verified the canonical homepage, `/favicon.svg` (HTTP 200, `image/svg+xml`, SHA-256 matching the local SVG), generated JS/CSS assets, redesign markers, `/api/health`, and `/api/ready`; readiness returned `db=ok`. No database migrations, environment-variable changes, opportunity-record changes, authentication tests, or CRUD tests were performed.
@@ -86,9 +87,10 @@ The `deployment/` directory retains the scripts used for manual prebuilt release
 - **Migration:** production TiDB database `launchboard` is at migration 004. The migration was applied with the separate migration account after a verified pre-migration backup and checksum/state guards.
 - **Backup:** local Git-ignored logical backup at `artifacts/db-backups/launchboard-pre-v1.2.sql` (12 tables, 82 rows; SHA-256 `c688fc1b6f41ce0ef67452ab3469a40e2837d40d4ac7313fa4ad5e27e1e639c1`).
 - **Live schema verification:** all 13 tables, required columns, indexes and foreign keys passed; migration history 001–004 matches repository checksums; runtime grants passed; rollback-only integrity probe completed and existing user data remained present.
-- **Deployment:** `dpl_BoUMH49zoDQc8WtjZbG8FcR6oZKD` — READY, production target, Node.js 24.x, Frankfurt (`fra1`). Unique URL: `https://launchboard-hcj1oa7ki-youssef-workplace.vercel.app`.
+- **Latest deployment:** `dpl_HTXGyoJghytWohG7dTEXFuY9d2iF` — READY, production target, Node.js 24.x, Frankfurt (`fra1`). Unique URL: `https://launchboard-ddxzys8vy-youssef-workplace.vercel.app`. It supersedes the earlier READY v1.2 deployment `dpl_BoUMH49zoDQc8WtjZbG8FcR6oZKD`.
 - **Aliases:** `https://launchboard-drab.vercel.app` and `https://launchboard-youssef-workplace.vercel.app` both resolve to this deployment.
 - **Build:** API-mode frontend build passed (Vite 6.4.5, 1,637 modules); Node 24 catch-all API handler rebuilt; local bundle preflight passed.
-- **Live smoke:** both public aliases returned homepage/assets with HTTP 200; Action Center/Overdue/Due today/Completed bundle markers were present; `/api/health` returned `status=ok`; `/api/ready` returned `status=ok, db=ok`; unauthenticated `/api/opportunities` returned HTTP 401 as expected.
+- **Live smoke:** the latest unique deployment URL and both public aliases returned homepage/assets with HTTP 200; favicon returned HTTP 200 as SVG; Action Center, Overdue, No due date, task Calendar and mobile Select-pill bundle markers were present; `/api/health` returned `status=ok`; `/api/ready` returned `status=ok, db=ok`; unauthenticated `/api/opportunities` returned HTTP 401; pre-auth CSRF bootstrap passed on the canonical production origin with the expected secure cookie.
+- **Runtime logs:** no error/fatal runtime log entries were returned for the latest deployment during the 30-minute post-deployment query.
 - **Coverage boundary:** no production authenticated CRUD or signup/reset email flow was repeated. Local full suites and the live schema/grant/integrity verifier provide the change-specific coverage.
 - **Git:** v1.2.0 source and tests are committed on `feature/action-center-v1.2`; `main` is synchronized and the `ui-v1.2.0` tag is pushed to `origin`.
