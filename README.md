@@ -2,7 +2,7 @@
 
 **A personal workspace for tracking opportunities.** Collect internships, jobs, and freelance projects you discover on external platforms, then organize every application and follow-up in one place.
 
-[**Open the live app**](https://launchboard-drab.vercel.app)
+[**Open Launchboard (production)**](https://launchboard-drab.vercel.app/)
 
 ## Preview
 
@@ -18,12 +18,12 @@
 
 <p align="center">
   <img src="docs/screenshots/opportunity-details.png" alt="Launchboard opportunity details showing structured job information, description and notes" width="70%">
-  <br><em>Opportunity details ? structured job information, description and notes.</em>
+  <br><em>Opportunity details — structured job information, description and notes.</em>
 </p>
 
 <p align="center">
   <img src="docs/screenshots/quick-capture.png" alt="Quick Capture keeps a LinkedIn job link and lets the user continue manually without sending the link to a server" width="75%">
-  <br><em>Quick Capture ? review supported public job-page suggestions or continue manually; LinkedIn links stay manual.</em>
+  <br><em>Quick Capture — review supported public job-page suggestions or continue manually; LinkedIn links stay manual.</em>
 </p>
 
 > Launchboard is an opportunity tracker, not a freelancing marketplace. It helps you manage opportunities you find elsewhere; it does not publish jobs or connect clients with freelancers.
@@ -204,14 +204,14 @@ npm run test:focus
 - [UI redesign](docs/ui-redesign.md) — visual system, responsive behavior, and preserved workflows.
 - [Server setup](server/README.md) — database accounts, migrations, environment variables, and backend operations.
 - [Shared domain package](packages/domain/README.md) — shared types, rules, module boundaries, and build order.
-- [v1.2.0 release notes](docs/v1.2-release-notes.md) ? Action Center features and compatibility.
-- [v1.3.0 release notes](docs/v1.3-release-notes.md) ? Quick Capture, structured details and LinkedIn limitations.
+- [v1.2.0 release notes](docs/v1.2-release-notes.md) — Action Center features and compatibility.
+- [v1.3.0 release notes](docs/v1.3-release-notes.md) — Quick Capture, structured details and LinkedIn limitations.
 
 ## Deployment
 
 The live demo is hosted on Vercel at [launchboard-drab.vercel.app](https://launchboard-drab.vercel.app) and uses TiDB Cloud Serverless for the authenticated workspace.
 
-The root `vercel.json` supports source-based deployment: Vercel builds the frontend into `dist/`, discovers the API function from `api/`, and sends non-API paths to the SPA entry point. The separate `deployment/vercel.json` is retained for the project's prebuilt-upload workflow.
+The root `vercel.json` routes `/api/*` requests, including nested authentication and capture endpoints, through the catch-all Vercel function. Other paths are rewritten to the SPA entry point. The separate `deployment/vercel.json` is retained for the project's prebuilt-upload workflow.
 
 Production credentials are configured in the hosting environment. Never commit real `.env` files, SMTP app passwords, database passwords, CSRF secrets, or other credentials. The repository includes only `server/.env.example` as a safe template.
 
