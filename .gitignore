@@ -21,6 +21,7 @@ test-results/
 !**/.env.example
 
 # Local deployment output (generated from the source and helper scripts)
+deployment/release-stage/
 deployment/api/
 deployment/assets/
 deployment/api-bundle.b64
@@ -36,6 +37,8 @@ docs/implementation-roadmap.md
 docs/superpowers/
 
 # Local diagnostics and recovery-only copies
+deployment/.local-release-api-smoke.mjs
+deployment/quick-capture-*.mjs
 cmp.cjs
 src/styles.baseline.css
 src/styles.tw.css

@@ -61,6 +61,45 @@ describe('parseImportFile CSV support', () => {
     expect(result.backup.records[0].id.length).toBeGreaterThan(0);
   });
 
+  it('round-trips structured job details through additive CSV columns', () => {
+    const source = makeOpportunity({
+      id: 'csv-job-details',
+      locations: ['Cairo, Egypt', 'Berlin, Germany'],
+      department: 'Engineering',
+      team: 'Platform',
+      workplaceType: 'Hybrid',
+      employmentType: 'Full-time',
+      postedDate: '2026-11-05',
+      compensation: 'EGP 15,000–20,000 monthly',
+      compensationDetails: {
+        minAmount: '15000.25',
+        maxAmount: '20000',
+        currency: 'EGP',
+        interval: 'month',
+      },
+    });
+
+    const result = parseImportFile(createCsv([source]), 'launchboard-export.csv');
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.backup.records[0]).toMatchObject({
+      locations: ['Cairo, Egypt', 'Berlin, Germany'],
+      department: 'Engineering',
+      team: 'Platform',
+      workplaceType: 'Hybrid',
+      employmentType: 'Full-time',
+      postedDate: '2026-11-05',
+      compensation: 'EGP 15,000–20,000 monthly',
+      compensationDetails: {
+        minAmount: '15000.25',
+        maxAmount: '20000',
+        currency: 'EGP',
+        interval: 'month',
+      },
+    });
+  });
+
   it('preserves valid JSON backups through the shared import entry point', () => {
     const source = makeOpportunity({ id: 'json-1' });
     const result = parseImportFile(createJsonBackup([source]), 'launchboard-backup.json');

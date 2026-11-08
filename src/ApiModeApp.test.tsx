@@ -246,6 +246,78 @@ describe('ApiModeApp', () => {
     }));
   });
 
+  it('creates a server opportunity from the explicit Quick Capture manual-review path', async () => {
+    const empty: OpportunityCollection = { revision: 7, items: [] };
+    mocks.load.mockResolvedValueOnce(empty).mockResolvedValueOnce(collection);
+    mocks.create.mockResolvedValue(collection.items[0]);
+
+    render(<ApiModeApp />);
+    await screen.findByText('You have no opportunities yet.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Quick Capture' }));
+    expect(screen.getByRole('heading', { name: 'Quick Capture' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Opportunity URL'), {
+      target: { value: 'https://jobs.example.org/roles/frontend-intern' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue manually' }));
+
+    expect(screen.getByRole('heading', { name: 'Review opportunity' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Opportunity URL')).toHaveValue(
+      'https://jobs.example.org/roles/frontend-intern',
+    );
+    fireEvent.change(screen.getByLabelText(/Title/), {
+      target: { value: 'Frontend Intern' },
+    });
+    fireEvent.change(screen.getByLabelText(/Company or client/), {
+      target: { value: 'Northwind Labs' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save opportunity' }));
+
+    await screen.findByText('Server role');
+    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Frontend Intern',
+      company: 'Northwind Labs',
+      url: 'https://jobs.example.org/roles/frontend-intern',
+      status: 'Saved',
+      priority: 'Medium',
+      activities: [],
+      interviews: [],
+      contacts: [],
+      materials: [],
+      tasks: [],
+    }));
+  });
+
+  it('passes archived API opportunities into Quick Capture duplicate warnings', async () => {
+    const archivedMatch = {
+      ...collection.items[0],
+      opportunity: makeOpportunity({
+        id: 'archived-server-match',
+        title: 'Frontend Intern',
+        company: 'Northwind Labs',
+        url: 'https://jobs.example.org/roles/frontend-intern',
+        archivedAt: '2026-10-20T08:00:00.000Z',
+      }),
+    };
+    mocks.load.mockResolvedValue({
+      revision: collection.revision,
+      items: [archivedMatch],
+    });
+
+    render(<ApiModeApp />);
+    await screen.findByRole('button', { name: 'Quick Capture' });
+    fireEvent.click(screen.getByRole('button', { name: 'Quick Capture' }));
+    fireEvent.change(screen.getByLabelText('Opportunity URL'), {
+      target: { value: 'https://jobs.example.org/roles/frontend-intern' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue manually' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent('Possible duplicate');
+    expect(screen.getByRole('status')).toHaveTextContent('Frontend Intern');
+    expect(screen.getByRole('status')).toHaveTextContent('Archived');
+    expect(screen.getByRole('button', { name: 'Save opportunity' })).toBeEnabled();
+  });
+
   it('updates using the loaded server version and preserves the existing record as the comparison source', async () => {
     mocks.load.mockResolvedValue(collection);
     const updated = {
@@ -713,7 +785,7 @@ describe('ApiModeApp', () => {
     await screen.findByText('Server role');
     fireEvent.click(screen.getByLabelText('Select all visible opportunities'));
     fireEvent.click(screen.getByRole('button', { name: 'Restore selected' }));
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Restore selected' }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Restore selected opportunities' })).getByRole('button', { name: 'Restore selected' }));
 
     await screen.findByRole('button', { name: 'Undo archive change' });
     expect(mocks.bulkRestore).toHaveBeenCalledWith([

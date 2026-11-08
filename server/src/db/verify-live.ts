@@ -16,6 +16,7 @@ export const REQUIRED_TABLES = [
   'auth_pre_sessions',
   'opportunity_deletions',
   'opportunities',
+  'opportunity_locations',
   'opportunity_tags',
   'contacts',
   'interviews',
@@ -398,6 +399,45 @@ export function evaluateSchema(snapshot: SchemaSnapshot): string[] {
     unsigned: true,
     autoIncrement: true,
   });
+  expectColumn('opportunities', 'department', {
+    dataType: 'varchar', charLength: 160, nullable: false,
+  });
+  expectColumn('opportunities', 'team', {
+    dataType: 'varchar', charLength: 160, nullable: false,
+  });
+  expectColumn('opportunities', 'workplace_type', {
+    dataType: 'varchar', charLength: 8, collation: 'ascii_bin', nullable: false,
+  });
+  expectColumn('opportunities', 'employment_type', {
+    dataType: 'varchar', charLength: 80, nullable: false,
+  });
+  expectColumn('opportunities', 'posted_date', {
+    dataType: 'date', nullable: true,
+  });
+  expectColumn('opportunities', 'compensation_min', {
+    dataType: 'decimal', nullable: true,
+  });
+  expectColumn('opportunities', 'compensation_max', {
+    dataType: 'decimal', nullable: true,
+  });
+  expectColumn('opportunities', 'compensation_currency', {
+    dataType: 'char', charLength: 3, collation: 'ascii_bin', nullable: true,
+  });
+  expectColumn('opportunities', 'compensation_interval', {
+    dataType: 'varchar', charLength: 10, collation: 'ascii_bin', nullable: true,
+  });
+  expectColumn('opportunity_locations', 'id', {
+    dataType: 'bigint', unsigned: true, autoIncrement: true, nullable: false,
+  });
+  expectColumn('opportunity_locations', 'opportunity_id', {
+    dataType: 'bigint', unsigned: true, nullable: false,
+  });
+  expectColumn('opportunity_locations', 'position', {
+    dataType: 'tinyint', unsigned: true, nullable: false,
+  });
+  expectColumn('opportunity_locations', 'location', {
+    dataType: 'varchar', charLength: 160, nullable: false,
+  });
   expectColumn('opportunities', 'deadline', {
     dataType: 'date',
     nullable: true,
@@ -500,6 +540,13 @@ export function evaluateSchema(snapshot: SchemaSnapshot): string[] {
     'user_id',
     'public_id',
   ]);
+  expectIndex('opportunity_locations', 'PRIMARY', true, ['id']);
+  expectIndex('opportunity_locations', 'uq_opportunity_locations_position', true, [
+    'opportunity_id', 'position',
+  ]);
+  expectIndex('opportunity_locations', 'idx_opportunity_locations_parent', false, [
+    'opportunity_id',
+  ]);
   expectIndex('opportunity_tags', 'PRIMARY', true, ['opportunity_id', 'tag_key']);
   expectIndex('contacts', 'PRIMARY', true, ['id']);
   expectIndex('contacts', 'uq_contacts_opportunity_public_id', true, [
@@ -567,6 +614,14 @@ export function evaluateSchema(snapshot: SchemaSnapshot): string[] {
     'opportunity_deletions',
     ['id'],
     'SET NULL',
+  );
+  expectForeignKey(
+    'opportunity_locations',
+    'fk_opportunity_locations_opportunity',
+    ['opportunity_id'],
+    'opportunities',
+    ['id'],
+    'CASCADE',
   );
   expectForeignKey(
     'opportunity_tags',
@@ -700,6 +755,13 @@ export function sanitizeGrant(grant: string): string {
     .replace(/IDENTIFIED BY '[^']*'/gi, "IDENTIFIED BY '<redacted>'");
 }
 
+/** Returns the latest migration from the version-ordered history query. */
+export function latestRecordedMigration(
+  applied: readonly { version: string; checksum: string }[],
+): { version: string; checksum: string } | null {
+  return applied.length > 0 ? applied[applied.length - 1] ?? null : null;
+}
+
 export interface CascadeReport {
   /** Whether a single opportunity DELETE succeeded around the RESTRICT key. */
   rawDeleteSucceeded: boolean;
@@ -712,6 +774,7 @@ export interface CascadeReport {
   remainingTags: number;
   remainingMaterials: number;
   remainingActivities: number;
+  remainingLocations: number;
   userStillPresent: number;
 }
 
@@ -721,6 +784,7 @@ interface ChildCounts {
   tags: number;
   materials: number;
   activities: number;
+  locations: number;
 }
 
 const CHILD_COUNT_SQL = `
@@ -729,7 +793,8 @@ SELECT
   (SELECT COUNT(*) FROM contacts WHERE opportunity_id = ?) AS contacts,
   (SELECT COUNT(*) FROM opportunity_tags WHERE opportunity_id = ?) AS tags,
   (SELECT COUNT(*) FROM materials WHERE opportunity_id = ?) AS materials,
-  (SELECT COUNT(*) FROM activities WHERE opportunity_id = ?) AS activities
+  (SELECT COUNT(*) FROM activities WHERE opportunity_id = ?) AS activities,
+  (SELECT COUNT(*) FROM opportunity_locations WHERE opportunity_id = ?) AS locations
 `;
 
 function readCounts(row: RowDataPacket | undefined): ChildCounts {
@@ -739,6 +804,7 @@ function readCounts(row: RowDataPacket | undefined): ChildCounts {
     tags: Number(row?.tags ?? 0),
     materials: Number(row?.materials ?? 0),
     activities: Number(row?.activities ?? 0),
+    locations: Number(row?.locations ?? 0),
   };
 }
 
@@ -747,6 +813,7 @@ async function countChildren(
   opportunityId: number,
 ): Promise<ChildCounts> {
   const [rows] = await connection.execute<RowDataPacket[]>(CHILD_COUNT_SQL, [
+    opportunityId,
     opportunityId,
     opportunityId,
     opportunityId,
@@ -860,6 +927,11 @@ async function insertFixture(
     [opportunityId, `verify-interview-${suffix}`, contactPublicId],
   );
   await connection.execute(
+    `INSERT INTO opportunity_locations (opportunity_id, \`position\`, location)
+     VALUES (?, 0, ?)`,
+    [opportunityId, `launchboard-live-verification-${suffix}`],
+  );
+  await connection.execute(
     `INSERT INTO opportunity_tags (opportunity_id, tag, tag_key, \`position\`)
      VALUES (?, 'Verify', 'verify', 0)`,
     [opportunityId],
@@ -883,7 +955,8 @@ async function insertFixture(
     before.contacts !== 1 ||
     before.tags !== 1 ||
     before.materials !== 1 ||
-    before.activities !== 1
+    before.activities !== 1 ||
+    before.locations !== 1
   ) {
     throw new LiveVerificationError(
       'FIXTURE_FAILED',
@@ -900,7 +973,8 @@ function assertChildrenRemoved(counts: ChildCounts): void {
     counts.contacts !== 0 ||
     counts.tags !== 0 ||
     counts.materials !== 0 ||
-    counts.activities !== 0
+    counts.activities !== 0 ||
+    counts.locations !== 0
   ) {
     throw new LiveVerificationError(
       'CASCADE_FAILED',
@@ -921,14 +995,17 @@ async function assertNoSyntheticResidue(
        (SELECT COUNT(*) FROM users
          WHERE email LIKE 'verify-%@example.invalid') AS users,
        (SELECT COUNT(*) FROM opportunities
-         WHERE public_id LIKE 'verify-%') AS opportunities`,
+         WHERE public_id LIKE 'verify-%') AS opportunities,
+       (SELECT COUNT(*) FROM opportunity_locations
+         WHERE location LIKE 'launchboard-live-verification-%') AS locations`,
   );
   const users = Number(rows[0]?.users ?? 0);
   const opportunities = Number(rows[0]?.opportunities ?? 0);
-  if (users > 0 || opportunities > 0) {
+  const locations = Number(rows[0]?.locations ?? 0);
+  if (users > 0 || opportunities > 0 || locations > 0) {
     throw new LiveVerificationError(
       'RESIDUE_DETECTED',
-      `Synthetic verification rows remain (users=${users}, opportunities=${opportunities}).`,
+      `Synthetic verification rows remain (users=${users}, opportunities=${opportunities}, locations=${locations}).`,
     );
   }
 }
@@ -1013,6 +1090,7 @@ export async function runCascadeCheck(
     remainingTags: safe.counts.tags,
     remainingMaterials: safe.counts.materials,
     remainingActivities: safe.counts.activities,
+    remainingLocations: safe.counts.locations,
     userStillPresent: safe.userStillPresent,
   };
 }
@@ -1064,13 +1142,20 @@ export async function runLiveVerification(
     log(`Target verified: ${LAUNCHBOARD_DATABASE}`);
 
     const [factRows] = await connection.query<RowDataPacket[]>(
-      `SELECT VERSION() AS version, @@SESSION.sql_mode AS sql_mode,
-              @@innodb_default_row_format AS row_format`,
+      'SELECT VERSION() AS version, @@SESSION.sql_mode AS sql_mode',
     );
     const version = String(factRows[0]?.version ?? 'unknown');
     const sqlMode = String(factRows[0]?.sql_mode ?? '');
+
+    // TiDB does not expose every MySQL/InnoDB compatibility variable. Read
+    // this optional diagnostic through SHOW VARIABLES so an absent variable
+    // is reported as unknown instead of preventing schema verification.
+    const [rowFormatRows] = await connection.query<RowDataPacket[]>(
+      "SHOW VARIABLES LIKE 'innodb_default_row_format'",
+    );
+    const rowFormatValue = rowFormatRows[0]?.Value ?? rowFormatRows[0]?.value;
     const defaultRowFormat =
-      typeof factRows[0]?.row_format === 'string' ? factRows[0].row_format : null;
+      typeof rowFormatValue === 'string' ? rowFormatValue : null;
 
     const snapshot = await inspectSchema(connection);
     const schemaFailures = evaluateSchema(snapshot);
@@ -1120,7 +1205,7 @@ export async function runLiveVerification(
         'No migration history was recorded.',
       );
     }
-    const appliedMigration = applied[0]!;
+    const appliedMigration = latestRecordedMigration(applied)!;
     log(`Migration history verified: ${applied.map((migration) => migration.version).join(', ')}`);
 
     const [identityRows] = await connection.query<RowDataPacket[]>(

@@ -1,4 +1,4 @@
-import type { LaunchboardBackup } from '@launchboard/domain';
+import { normalizeOpportunityJobDetails, type LaunchboardBackup } from '@launchboard/domain';
 import type { Opportunity } from '../types/opportunity';
 import { createId } from './id';
 
@@ -208,6 +208,46 @@ export function parseOpportunityCsv(input: string): CsvImportResult {
     const demoValue = cell(row, headerIndex(headers, 'demo', 'is demo')).toLowerCase();
     const archivedAt = cell(row, headerIndex(headers, 'archived at'));
 
+    const rawLocations = cell(row, headerIndex(headers, 'locations (json)', 'locations'));
+    let locations: unknown[] = [];
+    if (rawLocations) {
+      if (rawLocations.startsWith('[')) {
+        try {
+          const parsedLocations: unknown = JSON.parse(rawLocations);
+          if (Array.isArray(parsedLocations)) locations = parsedLocations;
+        } catch {
+          return {
+            ok: false,
+            error: {
+              code: 'invalid-csv-row',
+              message: `Record ${recordNumber}: the Locations (JSON) column must contain a valid JSON array.`,
+            },
+          };
+        }
+      } else {
+        locations = rawLocations.split(/\r?\n|\s*;\s*/u);
+      }
+    }
+    const minAmount = cell(row, headerIndex(headers, 'compensation min', 'salary min'));
+    const maxAmount = cell(row, headerIndex(headers, 'compensation max', 'salary max'));
+    const currency = cell(row, headerIndex(headers, 'compensation currency', 'salary currency'));
+    const interval = cell(row, headerIndex(headers, 'compensation interval', 'salary interval'));
+    const jobDetails = normalizeOpportunityJobDetails({
+      locations,
+      department: cell(row, headerIndex(headers, 'department')),
+      team: cell(row, headerIndex(headers, 'team')),
+      workplaceType: cell(row, headerIndex(headers, 'workplace type')),
+      employmentType: cell(row, headerIndex(headers, 'employment type')),
+      postedDate: cell(row, headerIndex(headers, 'posted date', 'publication date')),
+      compensationDetails: minAmount || maxAmount || currency || interval
+        ? { minAmount, maxAmount, currency, interval }
+        : null,
+    });
+    const {
+      repaired: _repaired,
+      ...normalizedJobDetails
+    } = jobDetails;
+
     opportunities.push({
       id: cell(row, headerIndex(headers, 'id')) || createId(),
       title: cell(row, titleIndex),
@@ -219,6 +259,7 @@ export function parseOpportunityCsv(input: string): CsvImportResult {
       url: cell(row, headerIndex(headers, 'application url', 'url')),
       deadline: cell(row, headerIndex(headers, 'deadline')),
       followUpDate: cell(row, headerIndex(headers, 'follow-up date', 'follow up date')),
+      ...normalizedJobDetails,
       compensation: cell(row, headerIndex(headers, 'compensation')),
       description: cell(row, headerIndex(headers, 'description')),
       notes: cell(row, headerIndex(headers, 'notes', 'personal notes')),

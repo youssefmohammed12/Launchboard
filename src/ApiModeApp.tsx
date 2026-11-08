@@ -12,6 +12,9 @@ import { AuthScreen } from './components/AuthScreen';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { LocalMigrationDialog } from './components/LocalMigrationDialog';
 import { OpportunityForm } from './components/OpportunityForm';
+import { QuickCapture } from './components/QuickCapture';
+import { WhatsNewButton, WhatsNewDialog } from './components/WhatsNew';
+import { FeatureSpotlight } from './components/FeatureSpotlight';
 import { DetailsDialog } from './components/DetailsDialog';
 import { ApiBackupImportDialog } from './components/ApiBackupImportDialog';
 import { Sidebar } from './components/Sidebar';
@@ -44,7 +47,7 @@ import {
   type OpportunityResource,
   type VersionedOpportunityRef,
 } from './data/httpOpportunityRepository';
-import { ApiRequestError } from './data/apiClient';
+import { ApiRequestError, previewOpportunityCapture } from './data/apiClient';
 import { commitApiTaskMutation, type TaskCollectionMutation } from './data/taskOperations';
 import { getLocalMigrationMarker } from './data/localMigration';
 import { createId } from './utils/id';
@@ -180,11 +183,15 @@ export default function ApiModeApp() {
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [mutationBusy, setMutationBusy] = useState(false);
   const [showMigration, setShowMigration] = useState(false);
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
+  const [whatsNewOpener, setWhatsNewOpener] = useState<HTMLElement | null>(null);
+  const [spotlightReplayToken, setSpotlightReplayToken] = useState(0);
   const [showBackupImport, setShowBackupImport] = useState(false);
   const [backupImportOpener, setBackupImportOpener] = useState<HTMLElement | null>(null);
   const [backupExportBusy, setBackupExportBusy] = useState(false);
   const [editor, setEditor] = useState<OpportunityEditor | null>(null);
   const [editorOpener, setEditorOpener] = useState<HTMLElement | null>(null);
+  const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const [detailsOpener, setDetailsOpener] = useState<HTMLElement | null>(null);
   const [detailsFocusTarget, setDetailsFocusTarget] = useState<DetailsFocusTarget | null>(null);
@@ -339,6 +346,7 @@ export default function ApiModeApp() {
       }
       setEditor(null);
       setEditorOpener(null);
+      setQuickCaptureOpen(false);
       void loadCollection();
       return true;
     } catch (error) {
@@ -820,13 +828,29 @@ export default function ApiModeApp() {
 
   const openAdd = (trigger?: HTMLElement | null) => {
     setEditorOpener(trigger ?? null);
+    setQuickCaptureOpen(false);
     setEditor({ mode: 'create' });
+  };
+
+  const openQuickCapture = (trigger?: HTMLElement | null) => {
+    setEditorOpener(trigger ?? null);
+    setQuickCaptureOpen(true);
+    setEditor({ mode: 'create' });
+  };
+  const openWhatsNew = (trigger: HTMLElement) => {
+    setWhatsNewOpener(trigger);
+    setWhatsNewOpen(true);
+  };
+  const replayQuickCaptureSpotlight = () => {
+    setWhatsNewOpen(false);
+    window.setTimeout(() => setSpotlightReplayToken((current) => current + 1), 60);
   };
 
   const openEdit = (item: Opportunity, trigger?: HTMLElement | null) => {
     const resource = collection?.items.find((entry) => entry.opportunity.id === item.id);
     if (!resource) return;
     setEditorOpener(trigger ?? null);
+    setQuickCaptureOpen(false);
     setEditor({ mode: 'edit', resource });
   };
 
@@ -1013,10 +1037,23 @@ export default function ApiModeApp() {
             <button
               type="button"
               className="lb-topbar-add-button"
+              aria-label="Add opportunity"
               onClick={(event) => openAdd(event.currentTarget)}
             >
               <span aria-hidden="true">+</span>
-              Add opportunity
+              <span className="lb-topbar-add-full-label">Add opportunity</span>
+              <span className="lb-topbar-add-short-label">Add</span>
+            </button>
+            <WhatsNewButton onOpen={openWhatsNew} />
+            <button
+              type="button"
+              className="lb-topbar-quick-capture-button"
+              aria-label="Quick Capture"
+              data-feature-spotlight="quick-capture"
+              onClick={(event) => openQuickCapture(event.currentTarget)}
+            >
+              <span className="lb-topbar-quick-capture-full-label">Quick Capture</span>
+              <span className="lb-topbar-quick-capture-short-label">Capture</span>
             </button>
             <button
               type="button"
@@ -1228,7 +1265,21 @@ export default function ApiModeApp() {
         />
       )}
 
-      {editor && (
+      {editor && (quickCaptureOpen ? (
+        <QuickCapture
+          mode="api"
+          opener={editorOpener}
+          fallbackFocusId="api-main-content"
+          existingOpportunities={items}
+          onPreview={previewOpportunityCapture}
+          onCancel={() => {
+            setEditor(null);
+            setEditorOpener(null);
+            setQuickCaptureOpen(false);
+          }}
+          onSave={saveOpportunity}
+        />
+      ) : (
         <OpportunityForm
           key={editor.mode === 'edit'
             ? `${editor.resource.opportunity.id}:${editor.resource.version}`
@@ -1240,10 +1291,11 @@ export default function ApiModeApp() {
           onCancel={() => {
             setEditor(null);
             setEditorOpener(null);
+            setQuickCaptureOpen(false);
           }}
           onSave={saveOpportunity}
         />
-      )}
+      ))}
 
       {bulkAction && (
         <ConfirmDialog
@@ -1332,6 +1384,18 @@ export default function ApiModeApp() {
           onImported={setCollection}
         />
       )}
+      <WhatsNewDialog
+        open={whatsNewOpen}
+        opener={whatsNewOpener}
+        fallbackFocusId="api-main-content"
+        onClose={() => setWhatsNewOpen(false)}
+        onReplaySpotlight={replayQuickCaptureSpotlight}
+      />
+      <FeatureSpotlight
+        userId={auth.state.user.id}
+        replayToken={spotlightReplayToken}
+        onTryQuickCapture={openQuickCapture}
+      />
     </main>
   );
 }

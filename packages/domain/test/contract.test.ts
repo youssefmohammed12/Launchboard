@@ -14,6 +14,8 @@ import {
   OPPORTUNITY_STATUSES,
   OPPORTUNITY_TYPES,
   PRIORITIES,
+  WORKPLACE_TYPES,
+  COMPENSATION_INTERVALS,
   SYSTEM_ACTIVITY_TYPE,
   USER_ACTIVITY_TYPES,
   addDaysToISODate,
@@ -33,6 +35,8 @@ describe('controlled values', () => {
     expect(OPPORTUNITY_TYPES).toEqual(['Internship', 'Full-time', 'Part-time', 'Freelance']);
     expect(OPPORTUNITY_STATUSES).toEqual(['Saved', 'Applied', 'Interview', 'Offer', 'Rejected']);
     expect(PRIORITIES).toEqual(['Low', 'Medium', 'High']);
+    expect(WORKPLACE_TYPES).toEqual(['Remote', 'Hybrid', 'On-site']);
+    expect(COMPENSATION_INTERVALS).toEqual(['hour', 'day', 'week', 'month', 'year', 'one-time']);
     expect(INTERVIEW_MODES).toEqual(['Phone', 'Video', 'In person', 'Assessment', 'Other']);
     expect(INTERVIEW_STATUSES).toEqual(['Scheduled', 'Completed', 'Cancelled']);
     expect(INTERVIEW_OUTCOMES).toEqual(['Positive', 'Negative', 'No decision']);
@@ -108,10 +112,10 @@ describe('field validation', () => {
 });
 
 describe('backup contract', () => {
-  it('exports v2 while retaining explicit v1 import compatibility', () => {
+  it('exports v3 while retaining explicit v1 and v2 import compatibility', () => {
     expect(BACKUP_FORMAT).toBe('launchboard-backup');
-    expect(BACKUP_SCHEMA_VERSION).toBe(2);
-    expect(BACKUP_SUPPORTED_SCHEMA_VERSIONS).toEqual([1, 2]);
+    expect(BACKUP_SCHEMA_VERSION).toBe(3);
+    expect(BACKUP_SUPPORTED_SCHEMA_VERSIONS).toEqual([1, 2, 3]);
   });
 });
 

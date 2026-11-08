@@ -3,6 +3,7 @@ import type { Pool, PoolConnection } from 'mysql2/promise';
 import {
   evaluateGrants,
   evaluateSchema,
+  latestRecordedMigration,
   runCascadeCheck,
   runLiveVerification,
   sanitizeGrant,
@@ -91,6 +92,7 @@ function createFakeConnection(
               tags: value,
               materials: value,
               activities: value,
+              locations: value,
             },
           ],
           [],
@@ -107,6 +109,20 @@ function createFakeConnection(
 function newState(): FakeState {
   return { queries: [], rolledBack: 0, committed: 0, released: 0 };
 }
+
+describe('live migration report', () => {
+  it('reports the latest verified migration, not the initial migration', () => {
+    expect(latestRecordedMigration([
+      { version: '001_initial_schema', checksum: 'first' },
+      { version: '004_opportunity_tasks', checksum: 'middle' },
+      { version: '005_opportunity_job_details', checksum: 'latest' },
+    ])).toEqual({
+      version: '005_opportunity_job_details',
+      checksum: 'latest',
+    });
+    expect(latestRecordedMigration([])).toBeNull();
+  });
+});
 
 describe('live schema evaluation', () => {
   it('reports missing required tables', () => {
@@ -172,6 +188,28 @@ describe('v1.2 Action Center schema evaluation', () => {
     expect(failures).toContain('missing index tasks.uq_tasks_opportunity_public_id');
     expect(failures).toContain('missing index tasks.uq_tasks_opportunity_position');
     expect(failures).toContain('missing foreign key tasks.fk_tasks_opportunity');
+  });
+});
+
+describe('v1.3 structured Opportunity schema evaluation', () => {
+  it('requires the structured columns, ordered location table, indexes and cascade relationship', () => {
+    const failures = evaluateSchema(snapshot({
+      tables: [{
+        name: 'opportunity_locations',
+        engine: 'InnoDB',
+        collation: 'utf8mb4_unicode_ci',
+        rowFormat: 'Dynamic',
+      }],
+    }));
+
+    expect(failures).not.toContain('missing table opportunity_locations');
+    expect(failures).toContain('missing column opportunities.department');
+    expect(failures).toContain('missing column opportunities.compensation_min');
+    expect(failures).toContain('missing column opportunity_locations.id');
+    expect(failures).toContain('missing column opportunity_locations.location');
+    expect(failures).toContain('missing index opportunity_locations.PRIMARY');
+    expect(failures).toContain('missing index opportunity_locations.uq_opportunity_locations_position');
+    expect(failures).toContain('missing foreign key opportunity_locations.fk_opportunity_locations_opportunity');
   });
 });
 
@@ -257,6 +295,7 @@ describe('live cascade check safety', () => {
     expect(report.safeSequenceDeleted).toBe(1);
     expect(report.remainingInterviews).toBe(0);
     expect(report.remainingContacts).toBe(0);
+    expect(report.remainingLocations).toBe(0);
     expect(report.userStillPresent).toBe(1);
     expect(state.rolledBack).toBe(2);
     expect(state.committed).toBe(0);
@@ -272,6 +311,7 @@ describe('live cascade check safety', () => {
     expect(report.rawDeleteError).toContain('fk restrict');
     expect(report.safeSequenceDeleted).toBe(1);
     expect(report.remainingInterviews).toBe(0);
+    expect(report.remainingLocations).toBe(0);
     expect(state.rolledBack).toBe(2);
     expect(state.committed).toBe(0);
   });

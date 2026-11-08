@@ -70,18 +70,26 @@ describe('opportunity backup API — Stage 9', () => {
   });
   afterEach(() => vi.unstubAllEnvs());
 
-  it('exports a version-2 envelope with tasks and without server metadata', async () => {
+  it('exports a version-3 envelope with structured job details and without server metadata', async () => {
     setHandler((sql) => {
       if (sql.includes('SELECT opportunity_revision FROM users')) return [[{ opportunity_revision: 7 }], []];
       if (sql.includes('SELECT o.*')) return [[{
         id: 41, user_id: userId, public_id: 'opportunity-1', position: 0,
         title: 'Software Engineer', company: 'Acme', type: 'Internship', status: 'Applied',
         priority: 'High', url: 'https://example.test/job', deadline: '2026-11-15',
-        follow_up_date: '', compensation: '', description: '', notes: '',
+        follow_up_date: '', department: 'Engineering', team: 'Platform',
+        workplace_type: 'Hybrid', employment_type: 'Full-time', posted_date: '2026-11-05',
+        compensation_min: '15000.2500', compensation_max: '20000.0000',
+        compensation_currency: 'EGP', compensation_interval: 'month',
+        compensation: 'EGP 15,000–20,000 monthly', description: '', notes: '',
         archived_at: '2026-10-31 12:30:00.000', is_demo: 1, version: 9,
         created_at: '2026-10-20 10:00:00.000', updated_at: '2026-10-31 12:30:00.000',
       }], []];
       if (sql.includes('FROM opportunity_tags')) return [[{ opportunity_id: 41, tag: 'Remote' }], []];
+      if (sql.includes('FROM opportunity_locations')) return [[
+        { opportunity_id: 41, location: 'Cairo, Egypt', position: 0 },
+        { opportunity_id: 41, location: 'Berlin, Germany', position: 1 },
+      ], []];
       if (sql.includes('FROM activities')) return [[{
         opportunity_id: 41, public_id: 'activity-1', type: 'Application submitted',
         date: '2026-10-01', note: 'Applied.', position: 0,
@@ -113,10 +121,18 @@ describe('opportunity backup API — Stage 9', () => {
       expect(response.status).toBe(200);
       expect(response.headers.get('content-disposition')).toContain('attachment');
       expect(body).toMatchObject({
-        format: 'launchboard-backup', schemaVersion: 2,
+        format: 'launchboard-backup', schemaVersion: 3,
         opportunities: [{
           id: 'opportunity-1', archivedAt: '2026-10-31T12:30:00.000Z', isDemo: true,
-          tags: ['Remote'], activities: [{ id: 'activity-1', date: '2026-10-01' }],
+          tags: ['Remote'],
+          locations: ['Cairo, Egypt', 'Berlin, Germany'],
+          department: 'Engineering', team: 'Platform', workplaceType: 'Hybrid',
+          employmentType: 'Full-time', postedDate: '2026-11-05',
+          compensation: 'EGP 15,000–20,000 monthly',
+          compensationDetails: {
+            minAmount: '15000.25', maxAmount: '20000', currency: 'EGP', interval: 'month',
+          },
+          activities: [{ id: 'activity-1', date: '2026-10-01' }],
           contacts: [{ id: 'contact-1', name: 'Jordan Lee' }],
           interviews: [{ id: 'interview-1', contactId: 'contact-1', time: '09:30' }],
           materials: [{ id: 'material-1', version: 'v1' }],
@@ -203,8 +219,25 @@ describe('opportunity backup API — Stage 9', () => {
       const response = await request(baseUrl, 'import', {
         mode: 'merge',
         backup: backupEnvelope(
-          [{ ...validOpportunity, id: 'imported-1', tasks: [task] }],
-          { schemaVersion: 2 },
+          [{
+            ...validOpportunity,
+            id: 'imported-1',
+            locations: ['Cairo, Egypt', 'Berlin, Germany'],
+            department: 'Engineering',
+            team: 'Platform',
+            workplaceType: 'Hybrid',
+            employmentType: 'Full-time',
+            postedDate: '2026-11-05',
+            compensation: 'EGP 15,000–20,000 monthly',
+            compensationDetails: {
+              minAmount: '15000.25',
+              maxAmount: '20000',
+              currency: 'EGP',
+              interval: 'month',
+            },
+            tasks: [task],
+          }],
+          { schemaVersion: 3 },
         ),
       });
       const body = await response.json() as any;
@@ -219,12 +252,19 @@ describe('opportunity backup API — Stage 9', () => {
       expect(parentInsert?.[1]).toEqual([
         userId, 'imported-1', 7, 'Software Engineering Intern', 'Acme',
         'Internship', 'Applied', 'Medium', 'https://example.com/jobs/1',
-        '2026-11-01', null, '', '', '', null, 0,
+        '2026-11-01', null, 'Engineering', 'Platform', 'Hybrid', 'Full-time',
+        '2026-11-05', '15000.25', '20000', 'EGP', 'month',
+        'EGP 15,000–20,000 monthly', '', '', null, 0,
         '2026-11-01 10:00:00.000', '2026-11-01 10:00:00.000',
       ]);
       expect(sql.findIndex((statement) => statement.includes('INSERT INTO contacts')))
         .toBeLessThan(sql.findIndex((statement) => statement.includes('INSERT INTO interviews')));
-      for (const table of ['opportunity_tags', 'contacts', 'interviews', 'materials', 'activities', 'tasks']) {
+      const locationInserts = calls.filter(([statement]) => String(statement).includes('INSERT INTO opportunity_locations'));
+      expect(locationInserts.map(([, params]) => params)).toEqual([
+        [90, 0, 'Cairo, Egypt'],
+        [90, 1, 'Berlin, Germany'],
+      ]);
+      for (const table of ['opportunity_locations', 'opportunity_tags', 'contacts', 'interviews', 'materials', 'activities', 'tasks']) {
         expect(sql.some((statement) => statement.includes('INSERT INTO ' + table))).toBe(true);
       }
       const taskInsert = calls.find(([statement]) => String(statement).includes('INSERT INTO tasks'));
@@ -408,7 +448,7 @@ describe('opportunity backup API — Stage 9', () => {
       expect(body).toMatchObject({ mode: 'replace', revision: 10, replaced: 1, added: 1, finalCount: 1 });
       const orderedDeletes = [
         'DELETE FROM interviews', 'DELETE FROM tasks', 'DELETE FROM activities', 'DELETE FROM materials',
-        'DELETE FROM contacts', 'DELETE FROM opportunity_tags',
+        'DELETE FROM contacts', 'DELETE FROM opportunity_tags', 'DELETE FROM opportunity_locations',
         'DELETE FROM opportunities', 'DELETE FROM opportunity_deletions',
       ].map((fragment) => sql.findIndex((statement) => statement.includes(fragment)));
       expect(orderedDeletes.every((index) => index >= 0)).toBe(true);
@@ -463,7 +503,7 @@ describe('opportunity backup API — Stage 9', () => {
   it('reports unsupported schema and malformed envelopes as INVALID_BACKUP', async () => {
     await withTestServer(app(), async (baseUrl) => {
       const unsupported = await request(baseUrl, 'import', {
-        mode: 'merge', backup: backupEnvelope([], { schemaVersion: 3 }),
+        mode: 'merge', backup: backupEnvelope([], { schemaVersion: 4 }),
       });
       const unsupportedBody = await unsupported.json() as any;
       expect(unsupported.status).toBe(422);

@@ -51,6 +51,13 @@ const validOpportunity = {
     notes: '',
   }],
   tasks: [],
+  locations: [],
+  department: '',
+  team: '',
+  workplaceType: '',
+  employmentType: '',
+  postedDate: '',
+  compensationDetails: null,
   compensation: '',
   description: '',
   notes: '',
@@ -128,6 +135,56 @@ describe('versioned backup record normalization', () => {
       activities: [validOpportunity.activities[0]],
     });
     expect(result.opportunity).not.toHaveProperty('archivedAt');
+  });
+
+  it('normalizes legacy v1 and v2 records with safe empty job-detail defaults', () => {
+    const legacy = {
+      id: validOpportunity.id,
+      title: validOpportunity.title,
+      company: validOpportunity.company,
+      type: validOpportunity.type,
+      status: validOpportunity.status,
+      tasks: [],
+    };
+
+    for (const version of [1, 2]) {
+      const result = normalizeBackupOpportunityRecord(legacy, version);
+      expect(result.opportunity).toMatchObject({
+        locations: [],
+        department: '',
+        team: '',
+        workplaceType: '',
+        employmentType: '',
+        postedDate: '',
+        compensationDetails: null,
+      });
+      expect(result.repaired).toBe(true);
+    }
+  });
+
+  it('repairs invalid optional job details independently from a valid backup record', () => {
+    const result = normalizeBackupOpportunityRecord({
+      ...validOpportunity,
+      locations: [' Cairo ', 'cairo', 'Berlin'],
+      workplaceType: 'Global',
+      postedDate: '2026-02-30',
+      compensationDetails: {
+        minAmount: '22000',
+        maxAmount: '12000',
+        currency: 'EGP',
+        interval: 'month',
+      },
+    });
+
+    expect(result.failure).toBeNull();
+    expect(result.repaired).toBe(true);
+    expect(result.opportunity).toMatchObject({
+      locations: ['Cairo', 'Berlin'],
+      workplaceType: '',
+      postedDate: '',
+      compensationDetails: null,
+      compensation: '',
+    });
   });
 
   it('imports version-1 records without tasks, ignoring any unversioned task field', () => {

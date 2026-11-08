@@ -65,7 +65,7 @@ export async function main(): Promise<void> {
     });
 
     console.log(
-      `${PREFIX} MariaDB ${report.version}; sql_mode=${report.sqlMode || 'unknown'}; ` +
+      `${PREFIX} Database server ${report.version}; sql_mode=${report.sqlMode || 'unknown'}; ` +
         `default row format=${report.defaultRowFormat ?? 'unknown'}`,
     );
     for (const table of report.tables) {

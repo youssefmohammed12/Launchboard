@@ -9,6 +9,7 @@ import {
   resendVerification,
   requestPasswordReset,
   confirmPasswordReset,
+  previewOpportunityCapture,
   resetApiSecurityState,
 } from './apiClient';
 
@@ -140,6 +141,79 @@ describe('same-origin API client', () => {
       retryable: true,
     });
     expect((thrown as Error).message).not.toContain('private network diagnostic');
+  });
+
+  it('sends Quick Capture preview through the authenticated same-origin CSRF transport', async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    const preview = {
+      outcome: 'ready',
+      source: 'job-posting',
+      title: 'Frontend Intern',
+      company: 'Northwind Labs',
+      description: 'Work with the frontend team.',
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = String(input);
+      calls.push({ url, init });
+      if (url === '/api/auth/me') {
+        return jsonResponse({
+          user: { id: 'user-capture', email: 'person@example.com' },
+          csrfToken: 'capture-session-csrf',
+        });
+      }
+      if (url === '/api/capture/preview') return jsonResponse(preview);
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getCurrentUser();
+    const result = await previewOpportunityCapture('https://jobs.example.org/frontend');
+
+    expect(result).toEqual(preview);
+    expect(calls.map((call) => call.url)).toEqual([
+      '/api/auth/me',
+      '/api/capture/preview',
+    ]);
+    const request = calls[1];
+    expect(request?.init.method).toBe('POST');
+    expect(request?.init.credentials).toBe('same-origin');
+    expect(JSON.parse(String(request?.init.body))).toEqual({
+      url: 'https://jobs.example.org/frontend',
+    });
+    const headers = new Headers(request?.init.headers);
+    expect(headers.get('Content-Type')).toBe('application/json');
+    expect(headers.get('X-CSRF-Token')).toBe('capture-session-csrf');
+  });
+
+  it('surfaces the safe NOT_READY response from a disabled Quick Capture endpoint', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/auth/me') {
+        return jsonResponse({
+          user: { id: 'user-capture', email: 'person@example.com' },
+          csrfToken: 'capture-session-csrf',
+        });
+      }
+      if (url === '/api/capture/preview') {
+        return jsonResponse({
+          error: {
+            code: 'NOT_READY',
+            message: 'Authenticated preview is not enabled.',
+          },
+        }, 503);
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getCurrentUser();
+    await expect(
+      previewOpportunityCapture('https://jobs.example.org/frontend'),
+    ).rejects.toMatchObject({
+      name: 'ApiRequestError',
+      status: 503,
+      code: 'NOT_READY',
+    });
   });
 });
 

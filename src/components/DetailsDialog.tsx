@@ -83,6 +83,12 @@ const confirmRemoveButtonClass =
 const removeButtonClass =
   'inline-grid h-[28px] w-[28px] shrink-0 cursor-pointer place-items-center rounded-control border-0 bg-transparent text-muted hover:bg-status-rejected hover:text-danger';
 const dtClass = 'm-0 text-[0.78rem] uppercase tracking-[0.04em] text-muted';
+
+function formatCompensationAmount(value: string): string {
+  const [whole = '', fraction] = value.split('.');
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/gu, ',');
+  return fraction ? grouped + '.' + fraction : grouped;
+}
 const ddClass = 'm-0 [overflow-wrap:anywhere]';
 const activityControlClass =
   'w-full rounded-control border border-border bg-surface px-s3 py-[8px] text-inherit [font:inherit] [&[aria-invalid]]:border-danger';
@@ -159,11 +165,28 @@ export function DetailsDialog({
     }
   };
 
+  const structuredSalary = item.compensationDetails
+    ? [
+        item.compensationDetails.minAmount && item.compensationDetails.maxAmount
+          ? formatCompensationAmount(item.compensationDetails.minAmount) + '–' +
+            formatCompensationAmount(item.compensationDetails.maxAmount)
+          : formatCompensationAmount(item.compensationDetails.minAmount || item.compensationDetails.maxAmount),
+        item.compensationDetails.currency,
+        item.compensationDetails.interval ? '/' + item.compensationDetails.interval : '',
+      ].filter(Boolean).join(' ')
+    : '';
   const rows: [string, string][] = [
     ['Company', item.company],
     ['Type', item.type],
+    ['Employment type', item.employmentType || '—'],
+    ['Workplace', item.workplaceType || '—'],
+    ['Locations', item.locations.join(' · ') || '—'],
+    ['Department', item.department || '—'],
+    ['Team', item.team || '—'],
+    ['Posted date', item.postedDate ? formatDate(item.postedDate) : '—'],
     ['Deadline', formatDate(item.deadline)],
-    ['Compensation', item.compensation || '—'],
+    ['Compensation', item.compensation || structuredSalary || '—'],
+    ...(item.compensation && structuredSalary ? [['Structured salary', structuredSalary] as [string, string]] : []),
   ];
   const activities = sortActivities(item.activities);
 

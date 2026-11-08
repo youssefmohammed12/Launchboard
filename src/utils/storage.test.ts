@@ -67,11 +67,50 @@ describe('loadOpportunities', () => {
       contacts: [],
       materials: [],
       tasks: [],
+      locations: [],
+      department: '',
+      team: '',
+      workplaceType: '',
+      employmentType: '',
+      postedDate: '',
+      compensationDetails: null,
       compensation: '',
       description: '',
       notes: '',
     });
     expect(item.isDemo).toBeUndefined();
+  });
+
+  it('repairs malformed structured job details without discarding the opportunity', () => {
+    store([{
+      ...minimalRecord,
+      id: 'job-details-repair',
+      locations: [' Cairo ', 'cairo', 42, 'Berlin'],
+      department: ' Engineering ',
+      team: 'T'.repeat(200),
+      workplaceType: 'Fully remote',
+      employmentType: ' Full-time ',
+      postedDate: '2026-02-30',
+      compensation: 'EGP 15,000–20,000 monthly',
+      compensationDetails: {
+        minAmount: '20000',
+        maxAmount: '15000',
+        currency: 'egp',
+        interval: 'month',
+      },
+    }]);
+
+    const [item] = loadOpportunities();
+    expect(item).toMatchObject({
+      locations: ['Cairo', 'Berlin'],
+      department: 'Engineering',
+      team: 'T'.repeat(160),
+      workplaceType: '',
+      employmentType: 'Full-time',
+      postedDate: '',
+      compensation: 'EGP 15,000–20,000 monthly',
+      compensationDetails: null,
+    });
   });
 
   it('normalizes legacy tasks to an empty collection and safely repairs malformed task children', () => {

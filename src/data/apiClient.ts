@@ -1,3 +1,5 @@
+import type { CaptureFieldEvidenceMap, CaptureStructuredFields } from '@launchboard/domain';
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -211,6 +213,37 @@ export async function apiJson<T>(
     csrf = { csrfToken: result.csrfToken, context };
   }
   return result;
+}
+
+export type CapturePreviewOutcome =
+  | 'ready'
+  | 'partial'
+  | 'ambiguous'
+  | 'unsupported'
+  | 'blocked'
+  | 'not-found'
+  | 'timeout'
+  | 'too-large'
+  | 'unavailable';
+export type CapturePreviewSource = 'job-posting' | 'page-metadata' | 'none';
+
+export interface CapturePreviewResponse extends CaptureStructuredFields {
+  outcome: CapturePreviewOutcome;
+  source: CapturePreviewSource;
+  title: string;
+  company: string;
+  description: string;
+  compensation: string;
+  fieldEvidence: CaptureFieldEvidenceMap;
+}
+
+/** Authenticated, read-only preview. It never creates or modifies an opportunity. */
+export async function previewOpportunityCapture(url: string): Promise<CapturePreviewResponse> {
+  return apiJson<CapturePreviewResponse>('/capture/preview', {
+    method: 'POST',
+    body: { url },
+    csrfContext: 'authenticated',
+  });
 }
 
 export interface AuthResponse {

@@ -1,8 +1,13 @@
-import { useState, type ChangeEvent, type FormEvent } from 'react';
+import { useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
+import { findOpportunityDuplicates } from '@launchboard/domain';
+import type { CaptureFieldEvidenceMap } from '@launchboard/domain';
 import {
   OPPORTUNITY_STATUSES,
   OPPORTUNITY_TYPES,
   PRIORITIES,
+  WORKPLACE_TYPES,
+  COMPENSATION_INTERVALS,
+  type CompensationDetails,
   type FormErrors,
   type Opportunity,
   type OpportunityFormData,
@@ -23,6 +28,18 @@ interface Props {
   fallbackFocusId?: string;
   /** Optional notice shown when a stale server write refreshed the form base. */
   notice?: string;
+  /** Partial values used to prefill a new record, e.g. a reviewed Quick Capture draft. */
+  initialData?: Partial<OpportunityFormData>;
+  /** Optional heading for a specialized create flow. */
+  modalTitle?: string;
+  /** Optional submit label for a specialized create flow. */
+  submitLabel?: string;
+  /** Optional explanatory copy displayed above the fields. */
+  intro?: ReactNode;
+  /** Capture source/confidence shown during review only; never persisted. */
+  fieldEvidence?: CaptureFieldEvidenceMap;
+  /** Existing records checked for exact duplicates while this review form changes. */
+  duplicateOpportunities?: readonly Opportunity[];
   /** Returns false when the change could not be persisted. */
   onSave: (data: OpportunityFormData) => MutationOutcome;
   onCancel: () => void;
@@ -49,20 +66,77 @@ function toFormData(o: Opportunity): OpportunityFormData {
     url: o.url,
     deadline: o.deadline,
     followUpDate: o.followUpDate,
+    locations: o.locations,
+    department: o.department,
+    team: o.team,
+    workplaceType: o.workplaceType,
+    employmentType: o.employmentType,
+    postedDate: o.postedDate,
+    compensationDetails: o.compensationDetails,
     compensation: o.compensation,
     description: o.description,
     notes: o.notes,
   };
 }
 
-export function OpportunityForm({ initial, opener, fallbackFocusId, notice, onSave, onCancel }: Props) {
-  const [data, setData] = useState<OpportunityFormData>(() => (initial ? toFormData(initial) : emptyForm));
-  const [tagInput, setTagInput] = useState(() => (initial ? initial.tags.join(', ') : ''));
+export function OpportunityForm({
+  initial,
+  opener,
+  fallbackFocusId,
+  notice,
+  initialData,
+  modalTitle,
+  submitLabel,
+  intro,
+  fieldEvidence,
+  duplicateOpportunities,
+  onSave,
+  onCancel,
+}: Props) {
+  const [data, setData] = useState<OpportunityFormData>(() => (
+    initial ? toFormData(initial) : { ...emptyForm, ...initialData }
+  ));
+  const [tagInput, setTagInput] = useState(() => (
+    initial ? initial.tags.join(', ') : (initialData?.tags ?? emptyForm.tags).join(', ')
+  ));
+  const [locationInput, setLocationInput] = useState(() => (
+    initial ? initial.locations.join('\n') : (initialData?.locations ?? emptyForm.locations).join('\n')
+  ));
   const [errors, setErrors] = useState<FormErrors>({});
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [editedEvidenceFields, setEditedEvidenceFields] = useState<Set<keyof CaptureFieldEvidenceMap>>(() => new Set());
 
   type Change = ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>;
+  const markEvidenceEdited = (field: keyof CaptureFieldEvidenceMap) => {
+    setEditedEvidenceFields((current) => new Set(current).add(field));
+  };
+
+  const evidenceHint = (field: keyof CaptureFieldEvidenceMap) => {
+    const evidence = fieldEvidence?.[field];
+    const edited = editedEvidenceFields.has(field);
+    if (!edited && !evidence) return null;
+    return (
+      <span className="text-[0.74rem] text-muted" aria-live="polite">
+        {edited ? 'Edited by you' : `Source: ${evidence?.label} · ${evidence?.confidence} confidence`}
+      </span>
+    );
+  };
+
+  const updateCompensationDetails = <K extends keyof CompensationDetails>(
+    key: K,
+    value: CompensationDetails[K],
+  ) => setData((current) => ({
+    ...current,
+    compensationDetails: {
+      minAmount: current.compensationDetails?.minAmount ?? '',
+      maxAmount: current.compensationDetails?.maxAmount ?? '',
+      currency: current.compensationDetails?.currency ?? '',
+      interval: current.compensationDetails?.interval ?? '',
+      [key]: value,
+    },
+  }));
+
   const text = (
     key:
       | 'title'
@@ -70,10 +144,23 @@ export function OpportunityForm({ initial, opener, fallbackFocusId, notice, onSa
       | 'url'
       | 'deadline'
       | 'followUpDate'
+      | 'department'
+      | 'team'
+      | 'employmentType'
+      | 'postedDate'
       | 'compensation'
       | 'description'
       | 'notes',
-  ) => (e: Change) => setData((d) => ({ ...d, [key]: e.target.value }));
+  ) => (e: Change) => {
+    setData((d) => ({ ...d, [key]: e.target.value }));
+    if (
+      key === 'title' || key === 'company' || key === 'department' || key === 'team' ||
+      key === 'employmentType' || key === 'postedDate' || key === 'description' ||
+      key === 'compensation'
+    ) {
+      markEvidenceEdited(key);
+    }
+  };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -93,6 +180,14 @@ export function OpportunityForm({ initial, opener, fallbackFocusId, notice, onSa
         url: data.url.trim(),
         deadline: data.deadline.trim(),
         followUpDate: data.followUpDate.trim(),
+        locations: locationInput.split(/\r?\n/u).map((location) => location.trim()).filter(Boolean),
+        department: data.department.trim(),
+        team: data.team.trim(),
+        employmentType: data.employmentType.trim(),
+        postedDate: data.postedDate.trim(),
+        compensationDetails: data.compensationDetails && (data.compensationDetails.minAmount || data.compensationDetails.maxAmount)
+          ? data.compensationDetails
+          : null,
         tags: parsedTags.tags,
       });
 
@@ -122,10 +217,16 @@ export function OpportunityForm({ initial, opener, fallbackFocusId, notice, onSa
         {errors[k]}
       </span>
     ) : null;
+  const duplicateMatches = duplicateOpportunities
+    ? findOpportunityDuplicates(
+        { title: data.title, company: data.company, url: data.url },
+        duplicateOpportunities,
+      )
+    : [];
 
   return (
     <Modal
-      title={initial ? 'Edit opportunity' : 'Add opportunity'}
+      title={modalTitle ?? (initial ? 'Edit opportunity' : 'Add opportunity')}
       onClose={onCancel}
       initialFocusId="f-title"
       opener={opener}
@@ -139,14 +240,52 @@ export function OpportunityForm({ initial, opener, fallbackFocusId, notice, onSa
         noValidate
         className="grid grid-cols-2 gap-s4 px-s5 pt-s4 pb-s5 max-[640px]:grid-cols-1"
       >
+        {intro && (
+          <div className="col-span-2 max-[640px]:col-span-1">
+            {intro}
+          </div>
+        )}
+        {duplicateMatches.length > 0 && (
+          <section
+            className="col-span-2 grid gap-s2 rounded-control border border-[#e5c98d] bg-[#fff8e8] px-s3 py-s3 text-[0.83rem] text-[#76500f] max-[640px]:col-span-1"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <strong className="text-[0.88rem]">Possible duplicate</strong>
+            <p className="m-0 leading-relaxed">
+              We found an exact match in your workspace. Check it before saving. You can still save this opportunity if it is intentional.
+            </p>
+            <ul className="m-0 grid list-disc gap-s1 pl-5">
+              {duplicateMatches.map(({ opportunity, reasons }) => (
+                <li key={opportunity.id}>
+                  <span className="font-semibold">{opportunity.title || 'Untitled opportunity'}</span>
+                  {' · '}{opportunity.company || 'No company'}
+                  {opportunity.archivedAt && (
+                    <span className="ml-1 rounded-full border border-[#d9c18e] px-2 py-[1px] text-[0.7rem] font-semibold">Archived</span>
+                  )}
+                  <span className="block text-[0.77rem] text-[#82652c]">
+                    {reasons.includes('url') && reasons.includes('title-company')
+                      ? 'Same opportunity URL and title/company'
+                      : reasons.includes('url')
+                        ? 'Same opportunity URL'
+                        : 'Same title and company'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         <div className={fieldClass}>
           <label htmlFor="f-title" className={labelClass}>Title *</label>
           <input id="f-title" className={controlClass} value={data.title} onChange={text('title')} {...a11y('title')} />
+          {evidenceHint('title')}
           {msg('title')}
         </div>
         <div className={fieldClass}>
           <label htmlFor="f-company" className={labelClass}>Company or client *</label>
           <input id="f-company" className={controlClass} value={data.company} onChange={text('company')} {...a11y('company')} />
+          {evidenceHint('company')}
           {msg('company')}
         </div>
         <div className={fieldClass}>
@@ -198,8 +337,69 @@ export function OpportunityForm({ initial, opener, fallbackFocusId, notice, onSa
           </select>
         </div>
         <div className={fieldClass}>
-          <label htmlFor="f-comp" className={labelClass}>Compensation</label>
+          <label htmlFor="f-comp" className={labelClass}>Compensation (as advertised)</label>
           <input id="f-comp" className={controlClass} value={data.compensation} onChange={text('compensation')} />
+          {evidenceHint('compensation')}
+        </div>
+        <div className={fieldClass}>
+          <label htmlFor="f-posted-date" className={labelClass}>Posted date</label>
+          <input id="f-posted-date" type="date" className={controlClass} value={data.postedDate} onChange={text('postedDate')} />
+          {evidenceHint('postedDate')}
+        </div>
+        <div className={`${fieldClass} col-span-2 max-[640px]:col-span-1`}>
+          <span className={labelClass}>Structured compensation (optional)</span>
+          <div className="grid grid-cols-4 gap-s2 max-[640px]:grid-cols-2">
+            <label className={fieldClass}>
+              <span className="text-[0.78rem] text-muted">Minimum</span>
+              <input aria-label="Minimum compensation" inputMode="decimal" className={controlClass} value={data.compensationDetails?.minAmount ?? ''} onChange={(event) => { updateCompensationDetails('minAmount', event.target.value); markEvidenceEdited('compensationDetails'); }} />
+            </label>
+            <label className={fieldClass}>
+              <span className="text-[0.78rem] text-muted">Maximum</span>
+              <input aria-label="Maximum compensation" inputMode="decimal" className={controlClass} value={data.compensationDetails?.maxAmount ?? ''} onChange={(event) => { updateCompensationDetails('maxAmount', event.target.value); markEvidenceEdited('compensationDetails'); }} />
+            </label>
+            <label className={fieldClass}>
+              <span className="text-[0.78rem] text-muted">Currency</span>
+              <input aria-label="Compensation currency" maxLength={3} className={controlClass} value={data.compensationDetails?.currency ?? ''} onChange={(event) => { updateCompensationDetails('currency', event.target.value.toUpperCase()); markEvidenceEdited('compensationDetails'); }} />
+            </label>
+            <label className={fieldClass}>
+              <span className="text-[0.78rem] text-muted">Pay interval</span>
+              <select aria-label="Compensation interval" className={controlClass} value={data.compensationDetails?.interval ?? ''} onChange={(event) => { updateCompensationDetails('interval', event.target.value as CompensationDetails['interval']); markEvidenceEdited('compensationDetails'); }}>
+                <option value="">Unspecified</option>
+                {COMPENSATION_INTERVALS.map((interval) => <option key={interval} value={interval}>{interval}</option>)}
+              </select>
+            </label>
+          </div>
+          <span className="text-[0.75rem] text-muted">Keep the original wording above. Numeric values are optional and are never guessed from the text.</span>
+          {evidenceHint('compensationDetails')}
+        </div>
+        <div className={`${fieldClass} col-span-2 max-[640px]:col-span-1`}>
+          <label htmlFor="f-locations" className={labelClass}>Job locations</label>
+          <textarea id="f-locations" rows={2} className={controlClass} value={locationInput} onChange={(event) => { setLocationInput(event.target.value); markEvidenceEdited('locations'); }} placeholder="Cairo, Egypt\nRemote (Egypt)" />
+          <span className="text-[0.75rem] text-muted">One location per line; first location is treated as primary.</span>
+          {evidenceHint('locations')}
+        </div>
+        <div className={fieldClass}>
+          <label htmlFor="f-department" className={labelClass}>Department</label>
+          <input id="f-department" className={controlClass} value={data.department} onChange={text('department')} />
+          {evidenceHint('department')}
+        </div>
+        <div className={fieldClass}>
+          <label htmlFor="f-team" className={labelClass}>Team</label>
+          <input id="f-team" className={controlClass} value={data.team} onChange={text('team')} />
+          {evidenceHint('team')}
+        </div>
+        <div className={fieldClass}>
+          <label htmlFor="f-workplace" className={labelClass}>Workplace type</label>
+          <select id="f-workplace" className={controlClass} value={data.workplaceType} onChange={(event) => { setData((current) => ({ ...current, workplaceType: event.target.value as OpportunityFormData['workplaceType'] })); markEvidenceEdited('workplaceType'); }}>
+            <option value="">Unspecified</option>
+            {WORKPLACE_TYPES.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+          {evidenceHint('workplaceType')}
+        </div>
+        <div className={fieldClass}>
+          <label htmlFor="f-employment-type" className={labelClass}>Employer employment type</label>
+          <input id="f-employment-type" className={controlClass} value={data.employmentType} onChange={text('employmentType')} placeholder="Full-time, Internship, Contract…" />
+          {evidenceHint('employmentType')}
         </div>
         <div className={fieldClass}>
           <label htmlFor="f-deadline" className={labelClass}>Deadline</label>
@@ -242,13 +442,14 @@ export function OpportunityForm({ initial, opener, fallbackFocusId, notice, onSa
           {msg('tags')}
         </div>
         <div className={`${fieldClass} col-span-2 max-[640px]:col-span-1`}>
-          <label htmlFor="f-url" className={labelClass}>Application URL</label>
+          <label htmlFor="f-url" className={labelClass}>Opportunity URL</label>
           <input id="f-url" type="url" inputMode="url" placeholder="https://" className={controlClass} value={data.url} onChange={text('url')} {...a11y('url')} />
           {msg('url')}
         </div>
         <div className={`${fieldClass} col-span-2 max-[640px]:col-span-1`}>
           <label htmlFor="f-desc" className={labelClass}>Description</label>
           <textarea id="f-desc" rows={3} className={controlClass} value={data.description} onChange={text('description')} />
+          {evidenceHint('description')}
         </div>
         <div className={`${fieldClass} col-span-2 max-[640px]:col-span-1`}>
           <label htmlFor="f-notes" className={labelClass}>Personal notes</label>
@@ -267,7 +468,7 @@ export function OpportunityForm({ initial, opener, fallbackFocusId, notice, onSa
             Cancel
           </button>
           <button type="submit" className={primaryButtonClass} disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? 'Saving…' : submitLabel ?? 'Save'}
           </button>
         </div>
       </form>

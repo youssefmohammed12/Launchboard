@@ -180,6 +180,47 @@ describe('opportunity create/update schemas', () => {
     }
   });
 
+  it('accepts optional structured job details and rejects malformed values', () => {
+    const legacy = { ...validOpportunity } as Record<string, unknown>;
+    delete legacy.locations;
+    delete legacy.department;
+    delete legacy.team;
+    delete legacy.workplaceType;
+    delete legacy.employmentType;
+    delete legacy.postedDate;
+    delete legacy.compensationDetails;
+
+    expect(createOpportunityBodySchema.safeParse({ opportunity: legacy }).success).toBe(true);
+    expect(updateOpportunityBodySchema.safeParse({ opportunity: { id: 'opportunity-1', ...legacy } }).success).toBe(true);
+
+    expect(createOpportunityBodySchema.safeParse(createBody({
+      locations: ['Cairo', 'Berlin'],
+      department: 'Engineering',
+      team: 'Platform',
+      workplaceType: 'Hybrid',
+      employmentType: 'Full-time',
+      postedDate: '2026-11-05',
+      compensationDetails: {
+        minAmount: '15000.25',
+        maxAmount: '20000',
+        currency: 'EGP',
+        interval: 'month',
+      },
+    })).success).toBe(true);
+
+    for (const overrides of [
+      { locations: Array.from({ length: 11 }, (_unused, index) => 'City ' + index) },
+      { locations: ['x'.repeat(161)] },
+      { workplaceType: 'Anywhere' },
+      { postedDate: '2026-02-30' },
+      { compensationDetails: { minAmount: '-1', maxAmount: '', currency: 'EGP', interval: 'month' } },
+      { compensationDetails: { minAmount: '20000', maxAmount: '15000', currency: 'EGP', interval: 'month' } },
+      { compensationDetails: { minAmount: '1e5', maxAmount: '', currency: 'USD', interval: 'month' } },
+    ]) {
+      expectCreateRejected(overrides);
+    }
+  });
+
   it('accepts empty optional dates', () => {
     expect(
       createOpportunityBodySchema.safeParse(

@@ -73,7 +73,9 @@ import {
   type UndoEntry,
 } from './utils/undo';
 import { Sidebar } from './components/Sidebar';
+import { WhatsNewButton, WhatsNewDialog } from './components/WhatsNew';
 import { OpportunityForm } from './components/OpportunityForm';
+import { QuickCapture } from './components/QuickCapture';
 import { DetailsDialog } from './components/DetailsDialog';
 import { GlobalSearchDialog } from './components/GlobalSearchDialog';
 import { ConfirmDialog } from './components/ConfirmDialog';
@@ -92,7 +94,7 @@ import { ActionCenter, type TaskFocusTarget } from './pages/ActionCenter';
 type Dialog =
   | { kind: 'none' }
   | { kind: 'search' }
-  | { kind: 'form'; item?: Opportunity }
+  | { kind: 'form'; item?: Opportunity; quickCapture?: boolean }
   | { kind: 'details'; item: Opportunity; focusTarget?: DetailsFocusTarget | null }
   | { kind: 'delete'; item: Opportunity }
   | { kind: 'restore' }
@@ -136,6 +138,8 @@ interface ArchiveNotice {
 
 function LocalStorageApp() {
   const [view, setView] = useState<View>('dashboard');
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
+  const [whatsNewOpener, setWhatsNewOpener] = useState<HTMLElement | null>(null);
   const [pendingTaskFocus, setPendingTaskFocus] = useState<TaskFocusTarget | null>(null);
   const {
     items,
@@ -301,6 +305,15 @@ function LocalStorageApp() {
     if (dialog.kind === 'details') setDialog({ kind: 'form', item: dialog.item });
   };
   const openAdd = (trigger?: HTMLElement | null) => openForm(undefined, trigger);
+  const openQuickCapture = (trigger?: HTMLElement | null) => {
+    setArchiveNotice(null);
+    setOpener(trigger ?? null);
+    setDialog({ kind: 'form', quickCapture: true });
+  };
+  const openWhatsNew = (trigger: HTMLElement) => {
+    setWhatsNewOpener(trigger);
+    setWhatsNewOpen(true);
+  };
   const openEdit = (item: Opportunity, trigger?: HTMLElement | null) => openForm(item, trigger);
   const openDelete = (item: Opportunity, trigger?: HTMLElement | null) => {
     setOpener(trigger ?? null);
@@ -1022,6 +1035,17 @@ function LocalStorageApp() {
               <span className="lb-sync-dot" aria-hidden="true" />
               Saved in this browser
             </span>
+            <WhatsNewButton onOpen={openWhatsNew} />
+            <button
+              type="button"
+              className="lb-topbar-quick-capture-button"
+              aria-label="Quick Capture"
+              data-feature-spotlight="quick-capture"
+              onClick={(event) => openQuickCapture(event.currentTarget)}
+            >
+              <span className="lb-topbar-quick-capture-full-label">Quick Capture</span>
+              <span className="lb-topbar-quick-capture-short-label">Capture</span>
+            </button>
           </div>
         </header>
         <main className="lb-local-content" id="main-content" tabIndex={-1}>
@@ -1117,7 +1141,16 @@ function LocalStorageApp() {
         />
       )}
 
-      {dialog.kind === 'form' && (
+      {dialog.kind === 'form' && (dialog.quickCapture ? (
+        <QuickCapture
+          mode="local"
+          opener={opener}
+          fallbackFocusId="main-content"
+          existingOpportunities={items}
+          onSave={handleSave}
+          onCancel={close}
+        />
+      ) : (
         <OpportunityForm
           initial={dialog.item}
           opener={opener}
@@ -1125,7 +1158,7 @@ function LocalStorageApp() {
           onSave={handleSave}
           onCancel={close}
         />
-      )}
+      ))}
       {dialog.kind === 'search' && (
         <GlobalSearchDialog
           items={items}
@@ -1259,6 +1292,12 @@ function LocalStorageApp() {
           onRestore={handleRestoreBackup}
         />
       )}
+      <WhatsNewDialog
+        open={whatsNewOpen}
+        opener={whatsNewOpener}
+        fallbackFocusId="main-content"
+        onClose={() => setWhatsNewOpen(false)}
+      />
     </div>
   );
 }

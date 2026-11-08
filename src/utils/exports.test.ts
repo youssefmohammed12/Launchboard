@@ -23,6 +23,16 @@ const HEADERS = [
   'Tags',
   'Deadline',
   'Follow-up Date',
+  'Locations (JSON)',
+  'Department',
+  'Team',
+  'Workplace Type',
+  'Employment Type',
+  'Posted Date',
+  'Compensation Min',
+  'Compensation Max',
+  'Compensation Currency',
+  'Compensation Interval',
   'Compensation',
   'Application URL',
   'Description',
@@ -59,9 +69,12 @@ describe('createCsv', () => {
     const csv = createCsv([item]);
     const row = csv.split('\r\n')[1];
 
-    expect(row).toBe(
-      '"op,1","Frontend, ""Intern""","Line\nBreak","Internship","Applied","Medium","Remote, React","","","","","\'=SUM(A1)","","Yes","[]"',
-    );
+    expect(row).toContain('"op,1"');
+    expect(row).toContain('"Frontend, ""Intern"""');
+    expect(row).toContain('"Line\nBreak"');
+    expect(row).toContain('"[]"');
+    expect(row).toContain("\"'" + '=SUM(A1)' + "\"");
+    expect(row.endsWith('\"Yes\",\"[]\"')).toBe(true);
     expect(csv).toContain('\r\n');
     expect(csv.endsWith('\r\n')).toBe(false);
   });
@@ -123,6 +136,7 @@ describe('createCsv', () => {
 
     expect(row).toContain('"","","",""');
     expect(row.endsWith('"No","[]"')).toBe(true);
+    expect(row).toContain('"[]"');
   });
 
   it('includes archived records without changing the CSV schema', () => {

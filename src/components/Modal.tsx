@@ -109,7 +109,7 @@ export function Modal({ title, onClose, children, initialFocusId, opener, fallba
         <h2 id="modal-title" className="m-0">{title}</h2>
         <button
           type="button"
-          className="inline-grid h-[34px] w-[34px] cursor-pointer place-items-center rounded-control border-0 bg-transparent text-muted hover:bg-accent-soft hover:text-accent-dark"
+          className="lb-modal-close-button inline-grid h-[34px] w-[34px] cursor-pointer place-items-center rounded-control border-0 bg-transparent text-muted hover:bg-accent-soft hover:text-accent-dark"
           aria-label="Close dialog"
           disabled={closeDisabled}
           onClick={requestClose}

@@ -16,6 +16,7 @@ import {
 } from './opportunity.js';
 import { BACKUP_SCHEMA_VERSION } from './backup.js';
 import { normalizeTaskList } from './tasks.js';
+import { normalizeOpportunityJobDetails } from './jobDetails.js';
 import {
   MAX_CONTACTS,
   MAX_CONTACT_EMAIL_LENGTH,
@@ -344,6 +345,7 @@ export function normalizeBackupOpportunityRecord(
       ? { ...interview, contactId: '' }
       : interview,
   );
+  const { repaired: jobDetailsRepaired, ...normalizedJobDetails } = normalizeOpportunityJobDetails(record);
   const compensation = text(record, 'compensation');
   const description = text(record, 'description');
   const notes = text(record, 'notes');
@@ -361,6 +363,7 @@ export function normalizeBackupOpportunityRecord(
     !sameContacts(record.contacts, contacts) ||
     !sameMaterials(record.materials, materials) ||
     normalizedTasks.repaired ||
+    jobDetailsRepaired ||
     (schemaVersion === 1 &&
       record.tasks !== undefined &&
       (!Array.isArray(record.tasks) || record.tasks.length > 0)) ||
@@ -388,6 +391,7 @@ export function normalizeBackupOpportunityRecord(
       contacts,
       materials,
       tasks: normalizedTasks.tasks,
+      ...normalizedJobDetails,
       compensation,
       description,
       notes,

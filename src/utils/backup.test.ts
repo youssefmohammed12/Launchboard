@@ -344,14 +344,15 @@ describe('parseBackupJson', () => {
   });
 
   it('rejects unsupported schema versions', () => {
-    const result = parseBackupJson(JSON.stringify(envelope({ schemaVersion: 3 })));
+    const result = parseBackupJson(JSON.stringify(envelope({ schemaVersion: 4 })));
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.code).toBe('unsupported-schema');
-    expect(result.error.message).toContain('3');
+    expect(result.error.message).toContain('4');
     expect(result.error.message).toContain('1');
     expect(result.error.message).toContain('2');
+    expect(result.error.message).toContain('3');
   });
 
   it('rejects excessive record counts before normalizing them', () => {

@@ -74,6 +74,74 @@ describe('App storage recovery', () => {
     expect(localStorage.getItem(RECOVERY_KEY)).toBe(raw);
   });
 
+  it('captures a manual URL in LocalStorage mode without sending it to the preview API', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Quick Capture' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Quick Capture does not send your link to a server in this mode',
+    );
+    fireEvent.change(screen.getByLabelText('Opportunity URL'), {
+      target: { value: 'https://jobs.example.org/roles/local-frontend' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to details' }));
+
+    expect(screen.getByRole('heading', { name: 'Review opportunity' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Opportunity URL')).toHaveValue(
+      'https://jobs.example.org/roles/local-frontend',
+    );
+    fireEvent.change(screen.getByLabelText(/Title/), {
+      target: { value: 'Local Frontend Intern' },
+    });
+    fireEvent.change(screen.getByLabelText(/Company or client/), {
+      target: { value: 'Northwind Labs' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save opportunity' }));
+
+    expect(await screen.findByText('Local Frontend Intern')).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+    const saved = JSON.parse(localStorage.getItem(KEY) ?? '[]') as Array<{
+      title: string;
+      company: string;
+      url: string;
+    }>;
+    expect(saved).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        title: 'Local Frontend Intern',
+        company: 'Northwind Labs',
+        url: 'https://jobs.example.org/roles/local-frontend',
+      }),
+    ]));
+  });
+
+  it('passes archived LocalStorage opportunities into Quick Capture duplicate warnings', () => {
+    localStorage.clear();
+    localStorage.setItem(KEY, JSON.stringify([
+      makeOpportunity({
+        id: 'archived-local-match',
+        title: 'Frontend Intern',
+        company: 'Northwind Labs',
+        url: 'https://jobs.example.org/roles/frontend-intern',
+        archivedAt: '2026-10-20T08:00:00.000Z',
+      }),
+    ]));
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Quick Capture' }));
+    fireEvent.change(screen.getByLabelText('Opportunity URL'), {
+      target: { value: 'https://jobs.example.org/roles/frontend-intern' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to details' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent('Possible duplicate');
+    expect(screen.getByRole('status')).toHaveTextContent('Frontend Intern');
+    expect(screen.getByRole('status')).toHaveTextContent('Archived');
+    expect(screen.getByRole('button', { name: 'Save opportunity' })).toBeEnabled();
+  });
+
   it('treats a non-array root the same way instead of as an empty collection', () => {
     const raw = JSON.stringify({ records: [] });
     localStorage.setItem(KEY, raw);

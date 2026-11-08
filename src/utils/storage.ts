@@ -17,7 +17,7 @@ import { isValidISODate } from './dates';
 import { normalizeStoredInterviews, sameStoredInterviews } from './interviews';
 import { normalizeStoredMaterials, sameStoredMaterials } from './materials';
 import { normalizeStoredTags } from './opportunities';
-import { normalizeTaskList } from '@launchboard/domain';
+import { normalizeOpportunityJobDetails, normalizeTaskList } from '@launchboard/domain';
 
 const KEY = 'launchboard.opportunities.v1';
 export const RECOVERY_KEY = 'launchboard.recovery.raw.v1';
@@ -158,6 +158,7 @@ export function normalizeOpportunityRecord(value: unknown): NormalizedOpportunit
   const contacts = normalizeStoredContacts(o.contacts);
   const materials = normalizeStoredMaterials(o.materials);
   const normalizedTasks = normalizeTaskList(o.tasks);
+  const { repaired: jobDetailsRepaired, ...normalizedJobDetails } = normalizeOpportunityJobDetails(o);
   const interviews = repairInterviewContactReferences(
     normalizeStoredInterviews(o.interviews),
     contacts,
@@ -179,6 +180,7 @@ export function normalizeOpportunityRecord(value: unknown): NormalizedOpportunit
     !sameStoredContacts(o.contacts, contacts) ||
     !sameStoredMaterials(o.materials, materials) ||
     normalizedTasks.repaired ||
+    jobDetailsRepaired ||
     o.compensation !== compensation ||
     o.description !== description ||
     o.notes !== notes ||
@@ -202,6 +204,7 @@ export function normalizeOpportunityRecord(value: unknown): NormalizedOpportunit
       contacts,
       materials,
       tasks: normalizedTasks.tasks,
+      ...normalizedJobDetails,
       compensation,
       description,
       notes,

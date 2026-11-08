@@ -7,9 +7,9 @@ import type { Opportunity } from './opportunity.js';
  */
 export const BACKUP_FORMAT = 'launchboard-backup';
 /** Current full-fidelity JSON backup schema. */
-export const BACKUP_SCHEMA_VERSION = 2;
-/** Schema v1 remains importable for compatibility with existing user backups. */
-export const BACKUP_SUPPORTED_SCHEMA_VERSIONS = [1, BACKUP_SCHEMA_VERSION] as const;
+export const BACKUP_SCHEMA_VERSION = 3;
+/** Existing v1 and v2 user backups remain importable. */
+export const BACKUP_SUPPORTED_SCHEMA_VERSIONS = [1, 2, BACKUP_SCHEMA_VERSION] as const;
 
 export interface LaunchboardBackup {
   format: typeof BACKUP_FORMAT;

@@ -7,6 +7,14 @@
 
 /** Maximum tags stored on one opportunity. */
 export const MAX_TAGS = 10;
+
+/** Maximum distinct job/work locations stored on one opportunity. */
+export const MAX_OPPORTUNITY_LOCATIONS = 10;
+export const MAX_OPPORTUNITY_LOCATION_LENGTH = 160;
+export const MAX_OPPORTUNITY_DEPARTMENT_LENGTH = 160;
+export const MAX_OPPORTUNITY_TEAM_LENGTH = 160;
+export const MAX_OPPORTUNITY_EMPLOYMENT_TYPE_LENGTH = 80;
+export const MAX_COMPENSATION_AMOUNT_LENGTH = 24;
 /** Maximum characters in one tag. */
 export const MAX_TAG_LENGTH = 24;
 

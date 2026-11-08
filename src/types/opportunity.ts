@@ -16,6 +16,8 @@ export {
   OPPORTUNITY_STATUSES,
   OPPORTUNITY_TYPES,
   PRIORITIES,
+  WORKPLACE_TYPES,
+  COMPENSATION_INTERVALS,
   SYSTEM_ACTIVITY_TYPE,
   USER_ACTIVITY_TYPES,
 } from '@launchboard/domain';
@@ -24,6 +26,9 @@ export type {
   ActivityDraft,
   ActivityEntry,
   ActivityType,
+  CompensationDetails,
+  CompensationInterval,
+  WorkplaceType,
   ContactDraft,
   ContactEntry,
   InterviewDraft,

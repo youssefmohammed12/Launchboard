@@ -10,6 +10,8 @@ import { requestId } from './middleware/requestId.js';
 import { healthRouter } from './routes/health.js';
 import { createReadinessRouter } from './routes/readiness.js';
 import { createOpportunityRouter } from './routes/opportunities.js';
+import { createCaptureRouter } from './routes/capture.js';
+import type { OpportunityCapturePreviewService } from './services/opportunityCaptureService.js';
 
 /**
  * Transport limit for JSON requests. The version-1 backup itself is capped at
@@ -36,6 +38,8 @@ export interface AppOptions {
   dbPool?: Parameters<typeof createAuthRouter>[0];
   /** Injectable transactional email sender for deterministic auth tests. */
   emailSender?: AuthEmailSender;
+  /** Injectable read-only capture preview for focused route tests. */
+  capturePreview?: OpportunityCapturePreviewService;
   /**
    * Extension point for route modules. Called after common middleware and the
    * health route, but before the 404 and error handlers.
@@ -52,6 +56,11 @@ export function createApp(options: AppOptions = {}): Express {
   app.disable('x-powered-by');
 
   app.use(requestId);
+  // Capture has its own tiny body parser, deliberately mounted before the
+  // global JSON parser so auth/origin checks run before any request body parse.
+  app.use('/api/capture', createCaptureRouter(options.dbPool ?? null,
+    options.capturePreview === undefined ? {} : { preview: options.capturePreview },
+  ));
   app.use(
     express.json({
       limit: options.jsonLimit ?? JSON_BODY_LIMIT_BYTES,

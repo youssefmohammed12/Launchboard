@@ -43,6 +43,46 @@ describe('OpportunityForm', () => {
     );
   });
 
+  it('edits and saves structured job details while preserving free-text compensation', () => {
+    const { onSave } = renderForm();
+
+    fireEvent.change(screen.getByLabelText(/Title/), { target: { value: 'Platform Engineer' } });
+    fireEvent.change(screen.getByLabelText(/Company or client/), { target: { value: 'Northwind' } });
+    fireEvent.change(screen.getByLabelText(/Compensation \(as advertised\)/), {
+      target: { value: 'EGP 15,000–20,000 monthly' },
+    });
+    fireEvent.change(screen.getByLabelText(/Job locations/), {
+      target: { value: 'Cairo, Egypt\nBerlin, Germany' },
+    });
+    fireEvent.change(screen.getByLabelText(/Department/), { target: { value: ' Engineering ' } });
+    fireEvent.change(screen.getByLabelText(/Team/), { target: { value: 'Platform' } });
+    fireEvent.change(screen.getByLabelText(/Workplace type/), { target: { value: 'Hybrid' } });
+    fireEvent.change(screen.getByLabelText(/Employer employment type/), { target: { value: 'Full-time' } });
+    fireEvent.change(screen.getByLabelText(/Posted date/), { target: { value: '2026-11-05' } });
+    fireEvent.change(screen.getByLabelText(/Minimum compensation/), { target: { value: '15000' } });
+    fireEvent.change(screen.getByLabelText(/Maximum compensation/), { target: { value: '20000' } });
+    fireEvent.change(screen.getByLabelText(/Compensation currency/), { target: { value: 'egp' } });
+    fireEvent.change(screen.getByLabelText(/Compensation interval/), { target: { value: 'month' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      locations: ['Cairo, Egypt', 'Berlin, Germany'],
+      department: 'Engineering',
+      team: 'Platform',
+      workplaceType: 'Hybrid',
+      employmentType: 'Full-time',
+      postedDate: '2026-11-05',
+      compensation: 'EGP 15,000–20,000 monthly',
+      compensationDetails: {
+        minAmount: '15000',
+        maxAmount: '20000',
+        currency: 'EGP',
+        interval: 'month',
+      },
+    }));
+  });
+
   it('keeps the form open and shows an asynchronous server save error', async () => {
     const onSave = vi.fn(async () => {
       throw new Error('This opportunity changed on the server. Reload and try again.');
@@ -74,7 +114,7 @@ describe('OpportunityForm', () => {
     fireEvent.change(screen.getByLabelText(/Company or client/), {
       target: { value: 'Northwind Labs' },
     });
-    fireEvent.change(screen.getByLabelText(/Application URL/), {
+    fireEvent.change(screen.getByLabelText(/Opportunity URL/), {
       target: { value: 'not-a-url' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));

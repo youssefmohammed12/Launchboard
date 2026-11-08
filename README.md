@@ -17,8 +17,13 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/opportunity-details.png" alt="Launchboard opportunity details showing a contact, linked interview, resume metadata and activity timeline" width="70%">
-  <br><em>Opportunity details — contacts, linked interview rounds, application-material metadata and activity history.</em>
+  <img src="docs/screenshots/opportunity-details.png" alt="Launchboard opportunity details showing structured job information, description and notes" width="70%">
+  <br><em>Opportunity details ? structured job information, description and notes.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/quick-capture.png" alt="Quick Capture keeps a LinkedIn job link and lets the user continue manually without sending the link to a server" width="75%">
+  <br><em>Quick Capture ? review supported public job-page suggestions or continue manually; LinkedIn links stay manual.</em>
 </p>
 
 > Launchboard is an opportunity tracker, not a freelancing marketplace. It helps you manage opportunities you find elsewhere; it does not publish jobs or connect clients with freelancers.
@@ -29,6 +34,7 @@
 - **Manage opportunities:** create, edit, search, filter, sort, and switch between list and board views.
 - **Keep applications organized:** track status, priority, deadlines, follow-up dates, compensation, tags, and notes.
 - **Manage the full workspace:** attach interviews, contacts, application materials, and activity history to each opportunity.
+- **Capture faster:** use Quick Capture to review suggested details from supported public employer/ATS pages, inspect field evidence, and continue manually when a page is unsupported. LinkedIn links stay manual.
 - **Plan your next actions:** manage opportunity-linked tasks in the Action Center with priorities, optional due dates, completion, and clear overdue/upcoming groups.
 - **Stay on top of work:** see overdue and due-today tasks on the Dashboard and dated open tasks in Calendar, without mixing them with deadlines or interviews.
 - **Review progress:** view reports and export your records.
@@ -94,7 +100,7 @@ To explore the sample workflow, start the frontend locally and open it in a fres
 4. Add application-material metadata for a resume and record an update in the activity timeline.
 5. Explore Calendar, Deadlines and Reports to see the same opportunities from different views.
 
-The screenshots above use the same built-in sample set. The nested contact, interview, material and activity shown in the details screenshot were added in an isolated browser session for the capture; they are not preloaded sample records. The hosted authenticated workspace is separate from this local browser demo.
+The screenshots above use a fresh, isolated browser profile and synthetic demo records. They do not contain or expose any data from the hosted authenticated workspace.
 
 ## Getting started
 
@@ -198,6 +204,8 @@ npm run test:focus
 - [UI redesign](docs/ui-redesign.md) — visual system, responsive behavior, and preserved workflows.
 - [Server setup](server/README.md) — database accounts, migrations, environment variables, and backend operations.
 - [Shared domain package](packages/domain/README.md) — shared types, rules, module boundaries, and build order.
+- [v1.2.0 release notes](docs/v1.2-release-notes.md) ? Action Center features and compatibility.
+- [v1.3.0 release notes](docs/v1.3-release-notes.md) ? Quick Capture, structured details and LinkedIn limitations.
 
 ## Deployment
 

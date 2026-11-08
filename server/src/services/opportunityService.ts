@@ -31,6 +31,15 @@ interface OpportunityRow extends RowDataPacket {
   url: string;
   deadline: string | null;
   follow_up_date: string | null;
+  department: string | null;
+  team: string | null;
+  workplace_type: string | null;
+  employment_type: string | null;
+  posted_date: string | null;
+  compensation_min: string | number | null;
+  compensation_max: string | number | null;
+  compensation_currency: string | null;
+  compensation_interval: string | null;
   compensation: string;
   description: string;
   notes: string;
@@ -53,6 +62,11 @@ interface ActivityRow extends RowDataPacket {
 interface TagRow extends RowDataPacket {
   opportunity_id?: number | string;
   tag: string;
+}
+
+interface OpportunityLocationRow extends RowDataPacket {
+  opportunity_id?: number | string;
+  location: string;
 }
 
 interface ContactRow extends RowDataPacket {
@@ -153,6 +167,18 @@ export interface OpportunityResource {
       version: string; status: string; notes: string;
     }>;
     tasks: TaskEntry[];
+    locations: string[];
+    department: string;
+    team: string;
+    workplaceType: '' | 'Remote' | 'Hybrid' | 'On-site';
+    employmentType: string;
+    postedDate: string;
+    compensationDetails: {
+      minAmount: string;
+      maxAmount: string;
+      currency: string;
+      interval: '' | 'hour' | 'day' | 'week' | 'month' | 'year' | 'one-time';
+    } | null;
     compensation: string;
     description: string;
     notes: string;
@@ -167,6 +193,10 @@ export interface OpportunityResource {
 export interface OpportunityCollection {
   revision: number;
   items: OpportunityResource[];
+}
+
+function canonicalDecimal(value: string | number): string {
+  return String(value).replace(/(\.\d*?)0+$/u, '$1').replace(/\.$/u, '');
 }
 
 function safeInteger(value: number | string, field: string): number {
@@ -200,6 +230,7 @@ function mapActivity(row: ActivityRow) {
 
 interface OpportunityChildren {
   tags: readonly TagRow[];
+  locations: readonly OpportunityLocationRow[];
   activities: readonly ActivityRow[];
   interviews: readonly InterviewRow[];
   contacts: readonly ContactRow[];
@@ -270,6 +301,20 @@ function mapOpportunity(
         completed: task.completed === true || task.completed === 1 || task.completed === '1',
         completedOn: task.completed_on ?? '',
       })),
+      locations: children.locations.map((location) => location.location),
+      department: row.department ?? '',
+      team: row.team ?? '',
+      workplaceType: (row.workplace_type ?? '') as '' | 'Remote' | 'Hybrid' | 'On-site',
+      employmentType: row.employment_type ?? '',
+      postedDate: row.posted_date ?? '',
+      compensationDetails: row.compensation_min === null && row.compensation_max === null
+        ? null
+        : {
+            minAmount: row.compensation_min === null ? '' : canonicalDecimal(row.compensation_min),
+            maxAmount: row.compensation_max === null ? '' : canonicalDecimal(row.compensation_max),
+            currency: row.compensation_currency ?? '',
+            interval: (row.compensation_interval ?? '') as '' | 'hour' | 'day' | 'week' | 'month' | 'year' | 'one-time',
+          },
       compensation: row.compensation,
       description: row.description,
       notes: row.notes,
@@ -329,6 +374,15 @@ async function replaceNestedCollections(
   await connection.execute('DELETE FROM contacts WHERE opportunity_id = ?', [opportunityId]);
   await connection.execute('DELETE FROM opportunity_tags WHERE opportunity_id = ?', [opportunityId]);
 
+  if (input.locations !== undefined) {
+    await connection.execute('DELETE FROM opportunity_locations WHERE opportunity_id = ?', [opportunityId]);
+    for (const [position, location] of input.locations.entries()) {
+      await connection.execute(
+        'INSERT INTO opportunity_locations (opportunity_id, `position`, location) VALUES (?, ?, ?)',
+        [opportunityId, position, location],
+      );
+    }
+  }
   for (const [position, tag] of input.tags.entries()) {
     await connection.execute(
       'INSERT INTO opportunity_tags (opportunity_id, tag, tag_key, `position`) VALUES (?, ?, ?, ?)',
@@ -379,6 +433,10 @@ async function selectChildren(
     'SELECT tag FROM opportunity_tags WHERE opportunity_id = ? ORDER BY `position`',
     [opportunityId],
   );
+  const [locations] = await connection.execute<OpportunityLocationRow[]>(
+    'SELECT location FROM opportunity_locations WHERE opportunity_id = ? ORDER BY `position`',
+    [opportunityId],
+  );
   const activities = await selectActivities(connection, opportunityId);
   const [interviews] = await connection.execute<InterviewRow[]>(
     'SELECT public_id, `round`, `date`, `time`, mode, status, outcome, meeting_url, location, preparation_notes, notes, contact_public_id FROM interviews WHERE opportunity_id = ? ORDER BY `position`',
@@ -396,7 +454,7 @@ async function selectChildren(
     'SELECT public_id, title, notes, priority, due_date, completed, completed_on, `position` FROM tasks WHERE opportunity_id = ? ORDER BY `position`',
     [opportunityId],
   );
-  return { tags, activities, interviews, contacts, materials, tasks };
+  return { tags, locations, activities, interviews, contacts, materials, tasks };
 }
 
 async function selectChildrenForCollection(
@@ -409,6 +467,10 @@ async function selectChildrenForCollection(
   const placeholders = ids.map(() => '?').join(', ');
   const [tags] = await connection.execute<TagRow[]>(
     'SELECT opportunity_id, tag FROM opportunity_tags WHERE opportunity_id IN (' + placeholders + ') ORDER BY opportunity_id, `position`',
+    ids,
+  );
+  const [locations] = await connection.execute<OpportunityLocationRow[]>(
+    'SELECT opportunity_id, location FROM opportunity_locations WHERE opportunity_id IN (' + placeholders + ') ORDER BY opportunity_id, `position`',
     ids,
   );
   const [activities] = await connection.execute<ActivityRow[]>(
@@ -433,11 +495,12 @@ async function selectChildrenForCollection(
   );
   for (const opportunity of opportunities) {
     grouped.set(String(opportunity.id), {
-      tags: [], activities: [], interviews: [], contacts: [], materials: [], tasks: [],
+      tags: [], locations: [], activities: [], interviews: [], contacts: [], materials: [], tasks: [],
     });
   }
   for (const [rows, key] of [
     [tags, 'tags'],
+    [locations, 'locations'],
     [activities, 'activities'],
     [interviews, 'interviews'],
     [contacts, 'contacts'],
@@ -669,8 +732,9 @@ export async function createOpportunity(
     );
     const position = safeInteger(positions[0]?.next_position ?? 0, 'opportunity position');
 
+    const compensationDetails = input.compensationDetails ?? null;
     await connection.execute<ResultSetHeader>(
-      'INSERT INTO opportunities (user_id, public_id, `position`, title, company, `type`, `status`, `priority`, `url`, deadline, follow_up_date, compensation, description, notes, is_demo, `version`, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))',
+      'INSERT INTO opportunities (user_id, public_id, `position`, title, company, `type`, `status`, `priority`, `url`, deadline, follow_up_date, department, team, workplace_type, employment_type, posted_date, compensation_min, compensation_max, compensation_currency, compensation_interval, compensation, description, notes, is_demo, `version`, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))',
       [
         userId,
         publicId,
@@ -683,6 +747,15 @@ export async function createOpportunity(
         input.url,
         dbDate(input.deadline),
         dbDate(input.followUpDate),
+        input.department ?? '',
+        input.team ?? '',
+        input.workplaceType ?? '',
+        input.employmentType ?? '',
+        dbDate(input.postedDate ?? ''),
+        compensationDetails?.minAmount || null,
+        compensationDetails?.maxAmount || null,
+        compensationDetails?.currency || null,
+        compensationDetails?.interval || null,
         input.compensation,
         input.description,
         input.notes,
@@ -734,8 +807,16 @@ export async function updateOpportunity(
       );
     }
 
+    const compensationDetails = input.compensationDetails === undefined
+      ? {
+          minAmount: current.compensation_min === null ? '' : canonicalDecimal(current.compensation_min),
+          maxAmount: current.compensation_max === null ? '' : canonicalDecimal(current.compensation_max),
+          currency: current.compensation_currency ?? '',
+          interval: current.compensation_interval ?? '',
+        }
+      : input.compensationDetails;
     await connection.execute<ResultSetHeader>(
-      'UPDATE opportunities SET title = ?, company = ?, `type` = ?, `status` = ?, `priority` = ?, `url` = ?, deadline = ?, follow_up_date = ?, compensation = ?, description = ?, notes = ?, `version` = `version` + 1, updated_at = UTC_TIMESTAMP(3) WHERE id = ? AND user_id = ? AND deleted_at IS NULL',
+      'UPDATE opportunities SET title = ?, company = ?, `type` = ?, `status` = ?, `priority` = ?, `url` = ?, deadline = ?, follow_up_date = ?, department = ?, team = ?, workplace_type = ?, employment_type = ?, posted_date = ?, compensation_min = ?, compensation_max = ?, compensation_currency = ?, compensation_interval = ?, compensation = ?, description = ?, notes = ?, `version` = `version` + 1, updated_at = UTC_TIMESTAMP(3) WHERE id = ? AND user_id = ? AND deleted_at IS NULL',
       [
         input.title,
         input.company,
@@ -745,6 +826,15 @@ export async function updateOpportunity(
         input.url,
         dbDate(input.deadline),
         dbDate(input.followUpDate),
+        input.department ?? current.department ?? '',
+        input.team ?? current.team ?? '',
+        input.workplaceType ?? current.workplace_type ?? '',
+        input.employmentType ?? current.employment_type ?? '',
+        input.postedDate === undefined ? current.posted_date : dbDate(input.postedDate),
+        compensationDetails?.minAmount || null,
+        compensationDetails?.maxAmount || null,
+        compensationDetails?.currency || null,
+        compensationDetails?.interval || null,
         input.compensation,
         input.description,
         input.notes,

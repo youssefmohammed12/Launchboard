@@ -48,6 +48,15 @@ const baseRow = {
   url: 'https://example.test/jobs/1',
   deadline: '2026-11-15',
   follow_up_date: '',
+  department: '',
+  team: '',
+  workplace_type: '',
+  employment_type: '',
+  posted_date: null,
+  compensation_min: null,
+  compensation_max: null,
+  compensation_currency: null,
+  compensation_interval: null,
   compensation: 'Competitive',
   description: 'Product engineering role',
   notes: '',
@@ -409,7 +418,89 @@ describe('opportunity aggregate API — Stage 6', () => {
         '',
         '',
         '',
+        '',
+        null,
+        null,
+        null,
+        null,
+        null,
+        '',
+        '',
+        '',
       ]);
+    });
+  });
+
+  it('persists structured job details and ordered locations in the create transaction', async () => {
+    const created = row({
+      id: 101,
+      public_id: 'structured-created',
+      department: 'Engineering',
+      team: 'Platform',
+      workplace_type: 'Hybrid',
+      employment_type: 'Full-time',
+      posted_date: '2026-11-05',
+      compensation_min: '15000.2500',
+      compensation_max: '20000.0000',
+      compensation_currency: 'EGP',
+      compensation_interval: 'month',
+    });
+    setExecuteHandler(async (sql) => {
+      if (sql.includes('SELECT id FROM users')) return [[{ id: userId }], []];
+      if (sql.includes('MAX(`position`)') && sql.includes('FROM opportunities')) return [[{ next_position: 0 }], []];
+      if (sql.includes('INSERT INTO opportunities')) return [{ affectedRows: 1, insertId: 101 }, []];
+      if (sql.includes('SELECT *') && sql.includes('FROM opportunities')) return [[created], []];
+      if (sql.includes('FROM opportunity_locations') && sql.includes('WHERE opportunity_id = ?')) {
+        return [[{ location: 'Cairo, Egypt' }, { location: 'Berlin, Germany' }], []];
+      }
+      if (sql.includes('UPDATE users SET opportunity_revision')) return [{ affectedRows: 1 }, []];
+      return [[], []];
+    });
+
+    await withTestServer(app(), async (baseUrl) => {
+      const response = await postCreate(baseUrl, createBody({
+        id: 'structured-created',
+        locations: ['Cairo, Egypt', 'Berlin, Germany'],
+        department: 'Engineering',
+        team: 'Platform',
+        workplaceType: 'Hybrid',
+        employmentType: 'Full-time',
+        postedDate: '2026-11-05',
+        compensationDetails: {
+          minAmount: '15000.25',
+          maxAmount: '20000',
+          currency: 'EGP',
+          interval: 'month',
+        },
+      }));
+      const body = await response.json() as any;
+
+      expect(response.status).toBe(201);
+      expect(body.opportunity).toMatchObject({
+        locations: ['Cairo, Egypt', 'Berlin, Germany'],
+        department: 'Engineering',
+        team: 'Platform',
+        workplaceType: 'Hybrid',
+        employmentType: 'Full-time',
+        postedDate: '2026-11-05',
+        compensationDetails: {
+          minAmount: '15000.25',
+          maxAmount: '20000',
+          currency: 'EGP',
+          interval: 'month',
+        },
+      });
+      const locationInsert = connection.execute.mock.calls.filter(([sql]) =>
+        String(sql).includes('INSERT INTO opportunity_locations'),
+      );
+      expect(locationInsert.map(([, params]) => params)).toEqual([
+        [101, 0, 'Cairo, Egypt'],
+        [101, 1, 'Berlin, Germany'],
+      ]);
+      const parentInsert = connection.execute.mock.calls.find(([sql]) =>
+        String(sql).includes('INSERT INTO opportunities'),
+      );
+      expect(parentInsert?.[0]).toContain('compensation_min');
     });
   });
 
@@ -593,6 +684,138 @@ describe('opportunity aggregate API — Stage 6', () => {
       expect(connection.commit).toHaveBeenCalledOnce();
       expect(connection.rollback).not.toHaveBeenCalled();
       expect(storedActivities).toHaveLength(1);
+    });
+  });
+
+  it('preserves structured fields when an older API client omits them on update', async () => {
+    let parentReads = 0;
+    const stored = row({
+      department: 'Engineering',
+      team: 'Platform',
+      workplace_type: 'Hybrid',
+      employment_type: 'Full-time',
+      posted_date: '2026-11-05',
+      compensation_min: '15000.2500',
+      compensation_max: '20000.0000',
+      compensation_currency: 'EGP',
+      compensation_interval: 'month',
+    });
+    let updateParams: unknown[] = [];
+    setExecuteHandler(async (sql, params) => {
+      if (sql.includes('SELECT *') && sql.includes('FROM opportunities')) {
+        parentReads += 1;
+        return [[parentReads === 1 ? stored : { ...stored, version: 4 }], []];
+      }
+      if (sql.includes('FROM activities') && sql.includes('WHERE opportunity_id = ?')) return [[], []];
+      if (sql.startsWith('UPDATE opportunities')) {
+        updateParams = params;
+        return [{ affectedRows: 1 }, []];
+      }
+      if (sql.includes('FROM opportunity_locations') && sql.includes('WHERE opportunity_id = ?')) {
+        return [[{ location: 'Cairo, Egypt' }, { location: 'Berlin, Germany' }], []];
+      }
+      if (sql.includes('UPDATE users SET opportunity_revision')) return [{ affectedRows: 1 }, []];
+      return [[], []];
+    });
+
+    const legacyBody = emptyChildUpdate();
+    const optionalFields = [
+      'locations', 'department', 'team', 'workplaceType',
+      'employmentType', 'postedDate', 'compensationDetails',
+    ];
+    for (const field of optionalFields) {
+      delete (legacyBody.opportunity as Record<string, unknown>)[field];
+    }
+
+    await withTestServer(app(), async (baseUrl) => {
+      const response = await putUpdate(baseUrl, legacyBody);
+      const body = await response.json() as any;
+
+      expect(response.status).toBe(200);
+      expect(body.opportunity).toMatchObject({
+        locations: ['Cairo, Egypt', 'Berlin, Germany'],
+        department: 'Engineering',
+        team: 'Platform',
+        workplaceType: 'Hybrid',
+        employmentType: 'Full-time',
+        postedDate: '2026-11-05',
+        compensationDetails: {
+          minAmount: '15000.25',
+          maxAmount: '20000',
+          currency: 'EGP',
+          interval: 'month',
+        },
+      });
+      expect(updateParams.slice(8, 17)).toEqual([
+        'Engineering', 'Platform', 'Hybrid', 'Full-time', '2026-11-05',
+        '15000.25', '20000', 'EGP', 'month',
+      ]);
+      const sql = connection.execute.mock.calls.map(([statement]) => String(statement));
+      expect(sql.some((statement) => statement.includes('DELETE FROM opportunity_locations'))).toBe(false);
+      expect(sql.some((statement) => statement.includes('INSERT INTO opportunity_locations'))).toBe(false);
+    });
+  });
+
+  it('clears structured fields only when the current client sends explicit empty values', async () => {
+    let parentReads = 0;
+    let updateParams: unknown[] = [];
+    const stored = row({
+      department: 'Engineering',
+      team: 'Platform',
+      workplace_type: 'Hybrid',
+      employment_type: 'Full-time',
+      posted_date: '2026-11-05',
+      compensation_min: '15000.0000',
+      compensation_max: '20000.0000',
+      compensation_currency: 'EGP',
+      compensation_interval: 'month',
+    });
+    const cleared = row();
+    setExecuteHandler(async (sql, params) => {
+      if (sql.includes('SELECT *') && sql.includes('FROM opportunities')) {
+        parentReads += 1;
+        return [[parentReads === 1 ? stored : cleared], []];
+      }
+      if (sql.includes('FROM activities') && sql.includes('WHERE opportunity_id = ?')) return [[], []];
+      if (sql.startsWith('UPDATE opportunities')) {
+        updateParams = params;
+        return [{ affectedRows: 1 }, []];
+      }
+      if (sql.includes('FROM opportunity_locations') && sql.includes('WHERE opportunity_id = ?')) return [[], []];
+      if (sql.includes('UPDATE users SET opportunity_revision')) return [{ affectedRows: 1 }, []];
+      return [[], []];
+    });
+
+    const clearBody = emptyChildUpdate({
+      locations: [],
+      department: '',
+      team: '',
+      workplaceType: '',
+      employmentType: '',
+      postedDate: '',
+      compensationDetails: null,
+    });
+
+    await withTestServer(app(), async (baseUrl) => {
+      const response = await putUpdate(baseUrl, clearBody);
+      const body = await response.json() as any;
+
+      expect(response.status).toBe(200);
+      expect(body.opportunity).toMatchObject({
+        locations: [],
+        department: '',
+        team: '',
+        workplaceType: '',
+        employmentType: '',
+        postedDate: '',
+        compensationDetails: null,
+      });
+      expect(updateParams.slice(8, 17)).toEqual([
+        '', '', '', '', null, null, null, null, null,
+      ]);
+      const sql = connection.execute.mock.calls.map(([statement]) => String(statement));
+      expect(sql.some((statement) => statement.includes('DELETE FROM opportunity_locations'))).toBe(true);
+      expect(sql.some((statement) => statement.includes('INSERT INTO opportunity_locations'))).toBe(false);
     });
   });
 

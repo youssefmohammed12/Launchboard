@@ -227,6 +227,7 @@ async function deleteOwnedOpportunities(connection: PoolConnection, userId: stri
   await childDelete('materials');
   await childDelete('contacts');
   await childDelete('opportunity_tags');
+  await childDelete('opportunity_locations');
   await connection.execute('DELETE FROM opportunities WHERE user_id = ?', [userId]);
   await connection.execute('DELETE FROM opportunity_deletions WHERE user_id = ?', [userId]);
 }
@@ -238,11 +239,17 @@ async function insertOpportunity(
   now: string,
 ): Promise<number | string> {
   const [result] = await connection.execute<ResultSetHeader>(
-    'INSERT INTO opportunities (user_id, public_id, `position`, title, company, `type`, `status`, `priority`, `url`, deadline, follow_up_date, compensation, description, notes, archived_at, is_demo, `version`, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)',
+    'INSERT INTO opportunities (user_id, public_id, `position`, title, company, `type`, `status`, `priority`, `url`, deadline, follow_up_date, department, team, workplace_type, employment_type, posted_date, compensation_min, compensation_max, compensation_currency, compensation_interval, compensation, description, notes, archived_at, is_demo, `version`, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)',
     [
       userId, opportunity.id, position, opportunity.title, opportunity.company,
       opportunity.type, opportunity.status, opportunity.priority, opportunity.url,
       opportunity.deadline || null, opportunity.followUpDate || null,
+      opportunity.department, opportunity.team, opportunity.workplaceType,
+      opportunity.employmentType, opportunity.postedDate || null,
+      opportunity.compensationDetails?.minAmount || null,
+      opportunity.compensationDetails?.maxAmount || null,
+      opportunity.compensationDetails?.currency || null,
+      opportunity.compensationDetails?.interval || null,
       opportunity.compensation, opportunity.description, opportunity.notes,
       archiveDateTime(opportunity.archivedAt), opportunity.isDemo ? 1 : 0, now, now,
     ],
@@ -255,6 +262,12 @@ async function insertChildren(
   opportunityId: number | string,
   opportunity: Opportunity,
 ): Promise<void> {
+  for (const [position, location] of opportunity.locations.entries()) {
+    await connection.execute(
+      'INSERT INTO opportunity_locations (opportunity_id, `position`, location) VALUES (?, ?, ?)',
+      [opportunityId, position, location],
+    );
+  }
   for (const [position, tag] of opportunity.tags.entries()) {
     await connection.execute(
       'INSERT INTO opportunity_tags (opportunity_id, tag, tag_key, `position`) VALUES (?, ?, ?, ?)',

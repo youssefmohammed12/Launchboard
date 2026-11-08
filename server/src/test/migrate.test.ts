@@ -158,6 +158,24 @@ describe('migration loading', () => {
     );
   });
 
+  it('loads the additive structured Opportunity migration without changing prior migrations', async () => {
+    const migrations = await loadMigrations(DEFAULT_MIGRATIONS_DIRECTORY);
+    const migration = migrations.find((entry) => entry.version === '005_opportunity_job_details');
+    expect(migration).toBeDefined();
+    expect(migration?.fileName).toBe('005_opportunity_job_details.sql');
+
+    const statements = splitSqlStatements(migration?.sql ?? '');
+    expect(statements).toHaveLength(2);
+    expect(statements[0]).toContain('ALTER TABLE opportunities');
+    expect(statements[0]).toContain('ADD COLUMN department');
+    expect(statements[0]).toContain('ADD COLUMN compensation_min');
+    expect(statements[1]).toContain('CREATE TABLE opportunity_locations');
+    expect(statements[1]).toContain('ON DELETE CASCADE');
+
+    const prior = migrations.filter((entry) => ['001_initial_schema', '002_auth_pre_sessions', '003_email_verification_password_reset', '004_opportunity_tasks'].includes(entry.version));
+    expect(prior).toHaveLength(4);
+  });
+
   it('rejects unsupported filenames, duplicate numbers and an empty directory', async () => {
     await withMigrations({ 'initial.sql': 'SELECT 1;' }, async (directory) => {
       await expect(loadMigrations(directory)).rejects.toMatchObject({
@@ -448,24 +466,46 @@ describe('initial schema and bootstrap invariants', () => {
   });
 });
 
-describe('opportunity task migration 004', () => {
-  const migrationPath = fileURLToPath(
+describe('opportunity migrations 004-005', () => {
+  const migration004Path = fileURLToPath(
     new URL('../../database/migrations/004_opportunity_tasks.sql', import.meta.url),
   );
+  const migration005Path = fileURLToPath(
+    new URL('../../database/migrations/005_opportunity_job_details.sql', import.meta.url),
+  );
 
-  it('is discovered after the existing migrations without connecting to a database', async () => {
+  it('discovers additive migration 005 after the existing migrations without connecting to a database', async () => {
     const migrations = await loadMigrations(DEFAULT_MIGRATIONS_DIRECTORY);
     expect(migrations.map((migration) => migration.version)).toEqual([
       '001_initial_schema',
       '002_auth_pre_sessions',
       '003_email_verification_password_reset',
       '004_opportunity_tasks',
+      '005_opportunity_job_details',
     ]);
     expect(migrations[3]?.sql).toContain('CREATE TABLE tasks');
+    expect(migrations[4]?.sql).toContain('CREATE TABLE opportunity_locations');
+  });
+
+  it('adds optional structured fields and an ordered location table without destructive SQL', () => {
+    const sql = readFileSync(migration005Path, 'utf8');
+    const statements = splitSqlStatements(sql);
+    expect(statements).toHaveLength(2);
+    expect(sql).toContain('department VARCHAR(160) NOT NULL DEFAULT');
+    expect(sql).toContain('team VARCHAR(160) NOT NULL DEFAULT');
+    expect(sql).toContain('posted_date DATE NULL');
+    expect(sql).toContain('compensation_min DECIMAL(18,4) NULL');
+    expect(sql).toContain('compensation_max DECIMAL(18,4) NULL');
+    expect(sql).toContain('UNIQUE KEY uq_opportunity_locations_position');
+    expect(sql).toContain('position` TINYINT UNSIGNED NOT NULL');
+    expect(sql).not.toMatch(/\bCHECK\b/i);
+    expect(sql).toContain('domain normalizer and strict API schemas enforce');
+    expect(sql).toContain('FOREIGN KEY (opportunity_id) REFERENCES opportunities (id) ON DELETE CASCADE');
+    expect(sql).not.toMatch(/DROP\s+(TABLE|DATABASE)|TRUNCATE|DELETE\s+FROM|healthbridge|nova_home/i);
   });
 
   it('creates an opportunity-owned table with bounded ordering and completion invariants', () => {
-    const sql = readFileSync(migrationPath, 'utf8');
+    const sql = readFileSync(migration004Path, 'utf8');
     const statements = splitSqlStatements(sql);
     expect(statements).toHaveLength(1);
     expect(sql).toContain('UNIQUE KEY uq_tasks_opportunity_public_id (opportunity_id, public_id)');

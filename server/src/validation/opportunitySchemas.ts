@@ -28,6 +28,14 @@ import {
   OPPORTUNITY_STATUSES,
   OPPORTUNITY_TYPES,
   PRIORITIES,
+  WORKPLACE_TYPES,
+  COMPENSATION_INTERVALS,
+  MAX_OPPORTUNITY_LOCATIONS,
+  MAX_OPPORTUNITY_LOCATION_LENGTH,
+  MAX_OPPORTUNITY_DEPARTMENT_LENGTH,
+  MAX_OPPORTUNITY_TEAM_LENGTH,
+  MAX_OPPORTUNITY_EMPLOYMENT_TYPE_LENGTH,
+  MAX_COMPENSATION_AMOUNT_LENGTH,
 } from '@launchboard/domain';
 import { z } from 'zod';
 import {
@@ -124,7 +132,42 @@ export const taskSchema = z.strictObject({
  * `url` intentionally have no length cap yet: the backend contract leaves those
  * caps unresolved. The global JSON limit is not a substitute for a field rule.
  */
+const structuredCompensationSchema = z.strictObject({
+  minAmount: z.string().max(MAX_COMPENSATION_AMOUNT_LENGTH)
+    .regex(/^(?:\d{1,14}(?:\.\d{1,4})?)?$/u),
+  maxAmount: z.string().max(MAX_COMPENSATION_AMOUNT_LENGTH)
+    .regex(/^(?:\d{1,14}(?:\.\d{1,4})?)?$/u),
+  currency: z.string().regex(/^(?:[A-Z]{3})?$/u),
+  interval: z.union([z.literal(''), z.enum(COMPENSATION_INTERVALS)]),
+}).superRefine((value, ctx) => {
+  if (!value.minAmount && !value.maxAmount) {
+    ctx.addIssue({ code: 'custom', path: ['minAmount'], message: 'must include a minimum or maximum amount' });
+    return;
+  }
+  if (value.minAmount && value.maxAmount) {
+    const toScaled = (amount: string): bigint => {
+      const [whole = '0', fraction = ''] = amount.split('.');
+      return BigInt(whole) * 10000n + BigInt(fraction.padEnd(4, '0'));
+    };
+    if (toScaled(value.minAmount) > toScaled(value.maxAmount)) {
+      ctx.addIssue({ code: 'custom', path: ['maxAmount'], message: 'must be greater than or equal to the minimum amount' });
+    }
+  }
+});
+
+const optionalJobDetailFields = {
+  locations: z.array(z.string().trim().min(1).max(MAX_OPPORTUNITY_LOCATION_LENGTH))
+    .max(MAX_OPPORTUNITY_LOCATIONS).optional(),
+  department: z.string().trim().max(MAX_OPPORTUNITY_DEPARTMENT_LENGTH).optional(),
+  team: z.string().trim().max(MAX_OPPORTUNITY_TEAM_LENGTH).optional(),
+  workplaceType: z.union([z.literal(''), z.enum(WORKPLACE_TYPES)]).optional(),
+  employmentType: z.string().trim().max(MAX_OPPORTUNITY_EMPLOYMENT_TYPE_LENGTH).optional(),
+  postedDate: optionalDateSchema.optional(),
+  compensationDetails: structuredCompensationSchema.nullable().optional(),
+};
+
 const opportunityFields = {
+  ...optionalJobDetailFields,
   title: requiredTextSchema(),
   company: requiredTextSchema(),
   type: z.enum(OPPORTUNITY_TYPES),

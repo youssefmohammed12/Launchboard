@@ -1,6 +1,8 @@
 export const OPPORTUNITY_TYPES = ['Internship', 'Full-time', 'Part-time', 'Freelance'] as const;
 export const OPPORTUNITY_STATUSES = ['Saved', 'Applied', 'Interview', 'Offer', 'Rejected'] as const;
 export const PRIORITIES = ['Low', 'Medium', 'High'] as const;
+export const WORKPLACE_TYPES = ['Remote', 'Hybrid', 'On-site'] as const;
+export const COMPENSATION_INTERVALS = ['hour', 'day', 'week', 'month', 'year', 'one-time'] as const;
 export const INTERVIEW_MODES = ['Phone', 'Video', 'In person', 'Assessment', 'Other'] as const;
 export const INTERVIEW_STATUSES = ['Scheduled', 'Completed', 'Cancelled'] as const;
 export const INTERVIEW_OUTCOMES = ['Positive', 'Negative', 'No decision'] as const;
@@ -21,6 +23,16 @@ export const ACTIVITY_TYPES = [...USER_ACTIVITY_TYPES, SYSTEM_ACTIVITY_TYPE] as 
 export type OpportunityType = (typeof OPPORTUNITY_TYPES)[number];
 export type OpportunityStatus = (typeof OPPORTUNITY_STATUSES)[number];
 export type Priority = (typeof PRIORITIES)[number];
+export type WorkplaceType = (typeof WORKPLACE_TYPES)[number];
+export type CompensationInterval = (typeof COMPENSATION_INTERVALS)[number];
+
+/** Exact optional numeric compensation details, represented as decimal strings. */
+export interface CompensationDetails {
+  minAmount: string;
+  maxAmount: string;
+  currency: string;
+  interval: CompensationInterval | '';
+}
 export type UserActivityType = (typeof USER_ACTIVITY_TYPES)[number];
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 export type InterviewMode = (typeof INTERVIEW_MODES)[number];
@@ -136,6 +148,18 @@ export interface Opportunity {
   materials: MaterialEntry[];
   /** Opportunity-owned tasks; normalized records always provide an array. */
   tasks: TaskEntry[];
+  /** Ordered job locations with the primary location first. */
+  locations: string[];
+  department: string;
+  team: string;
+  /** Employer workplace mode; blank when it was not explicitly supplied. */
+  workplaceType: WorkplaceType | '';
+  /** Employer's contract type, distinct from Launchboard's tracking type. */
+  employmentType: string;
+  /** Publication date from the job posting, or '' when unknown. */
+  postedDate: string;
+  /** Optional parsed numeric salary range; free-text compensation remains canonical. */
+  compensationDetails: CompensationDetails | null;
   compensation: string;
   description: string;
   notes: string;

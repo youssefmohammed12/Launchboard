@@ -85,7 +85,7 @@ describe('ApiBackupImportDialog', () => {
       dryRun: true,
       backup: expect.objectContaining({
         format: 'launchboard-backup',
-        schemaVersion: 2,
+        schemaVersion: 3,
         opportunities: expect.arrayContaining([
           expect.objectContaining({
             id: 'backup-1',
