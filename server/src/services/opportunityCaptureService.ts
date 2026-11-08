@@ -574,7 +574,7 @@ function parseWorkdayRoute(inputUrl: URL): WorkdayRoute | null {
   if (externalSegments.length < 3) return null;
   const externalPath = '/' + externalSegments.join('/');
 
-  const finalSlug = decodePathSegment(externalSegments.at(-1) ?? '');
+  const finalSlug = decodePathSegment(externalSegments[externalSegments.length - 1] ?? '');
   if (!finalSlug) return null;
   const roleSlug = finalSlug.replace(/_[A-Z]{1,8}\d[\w-]*$/iu, '');
   const searchText = roleSlug.replace(/[-_]+/gu, ' ').replace(/\s+/gu, ' ').trim();
@@ -937,7 +937,7 @@ function parsePersonioFeed(xml: string): PersonioFeedPosting[] {
     } else if (
       posting &&
       name === 'value' &&
-      stack.at(-1) === 'jobdescription'
+      stack[stack.length - 1] === 'jobdescription'
     ) {
       field = { tag: name, target: 'description', value: '' };
     }
@@ -952,7 +952,7 @@ function parsePersonioFeed(xml: string): PersonioFeedPosting[] {
   });
   parser.on('closetag', (tag) => {
     const name = tag.name.toLowerCase();
-    if (stack.at(-1) !== name) throw parser.makeError('Malformed Personio feed structure.');
+    if (stack[stack.length - 1] !== name) throw parser.makeError('Malformed Personio feed structure.');
 
     if (field?.tag === name) finishField();
 

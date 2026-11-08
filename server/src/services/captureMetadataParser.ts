@@ -247,7 +247,8 @@ function microdataTypeNames(element: HtmlElement): string[] {
   for (const rawType of rawTypes.split(/[\t\n\f\r ]+/u).filter(Boolean)) {
     try {
       const parsed = new URL(rawType);
-      const name = parsed.pathname.split('/').filter(Boolean).at(-1) ?? '';
+      const pathSegments = parsed.pathname.split('/').filter(Boolean);
+      const name = pathSegments[pathSegments.length - 1] ?? '';
       if (
         parsed.protocol === 'https:' || parsed.protocol === 'http:'
       ) {
@@ -629,7 +630,8 @@ function isJobPosting(value: Record<string, unknown>): value is JobPostingNode {
   return types.some((entry) => {
     if (typeof entry !== 'string') return false;
     const normalized = entry.trim().replace(/\/+$/u, '');
-    return normalized.split(/[\/#:]/u).at(-1)?.toLowerCase() === 'jobposting';
+    const typeSegments = normalized.split(/[\/#:]/u);
+    return typeSegments[typeSegments.length - 1]?.toLowerCase() === 'jobposting';
   });
 }
 
