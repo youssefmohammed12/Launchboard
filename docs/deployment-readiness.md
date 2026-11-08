@@ -2,16 +2,26 @@
 
 ## Current production deployment
 
-Last checked: **7 November 2026**.
+Last checked: **8 November 2026**.
 
-- Application: [https://launchboard-drab.vercel.app](https://launchboard-drab.vercel.app)
-- Hosting: Vercel Hobby, Node.js 24.x, Frankfurt region (`fra1`).
-- Database: TiDB Cloud Serverless, database `launchboard`.
-- Latest production deployment: `dpl_HTXGyoJghytWohG7dTEXFuY9d2iF` (READY; Action Center v1.2.0 release, 7 November 2026).
-- Latest deployment URL: `https://launchboard-ddxzys8vy-youssef-workplace.vercel.app`.
-- The current production application includes opportunity-linked tasks, Action Center, Dashboard Today's Focus, Calendar task events, responsive UI, CSV import and authenticated API integration.
+- **Application:** https://launchboard-drab.vercel.app.
+- **Hosting:** Vercel Hobby, Node.js 24.x, Frankfurt region (fra1).
+- **Database:** TiDB Cloud Serverless, database launchboard.
+- **Latest production deployment:** dpl_2AS7rWRJZVU4YAr8nNyR3bHuWY2D (READY, production target).
+- **Deployed Git commit:** 898a743d18af128f6dea1d21013623ba74744201 (fix: align capture types with Vercel API target).
+- **Immutable deployment URL:** https://launchboard-kdc1pt0iy-youssef-workplace.vercel.app.
+- The v1.3.0 production release includes Quick Capture, supported employer/ATS public page suggestions, field-level provenance, structured job details, duplicate warnings, manual fallback and the in-app What's New experience. LinkedIn URLs are retained for manual entry; automatic LinkedIn access is disabled.
 
-The 4 November favicon release used the existing prebuilt deployment workflow and reused the API function bundle unchanged. The frontend production build passed with 1,633 modules. Live smoke verified the canonical homepage, `/favicon.svg` (HTTP 200, `image/svg+xml`, SHA-256 matching the local SVG), generated JS/CSS assets, redesign markers, `/api/health`, and `/api/ready`; readiness returned `db=ok`. No database migrations, environment-variable changes, opportunity-record changes, authentication tests, or CRUD tests were performed.
+### Post-deployment read-only smoke
+
+- Canonical homepage: HTTP 200.
+- Referenced JavaScript and CSS assets: HTTP 200.
+- /api/health: HTTP 200 (status=ok).
+- /api/ready: HTTP 200 (status=ok, db=ok).
+- Unauthenticated /api/opportunities: HTTP 401, as expected.
+- Vercel deployment build completed and state is READY. The final API catch-all source was also checked with the repository's ES2020 compiler settings after replacing five unsupported Array.at() usages with equivalent index access.
+
+No opportunity records, accounts or database schema were changed during post-deployment verification. No migration was re-run. A production authenticated CRUD test was intentionally not performed.
 
 ## Architecture
 
@@ -261,43 +271,17 @@ The user tested Quick Capture on three real public job postings through the pers
 **Decision:** provider extraction and per-field provenance are **initially accepted for these three examples**. Full content accuracy and save/persistence acceptance remain open.
 
 
-## 2026-11-08 — LinkedIn Quick Capture compatibility probe (PARTIAL ONLY)
+## 2026-11-08 ? LinkedIn compatibility probe (HISTORICAL; SUPERSEDED)
 
-- Confirmed there is **no LinkedIn-specific provider adapter** in `server/src/services/opportunityCaptureService.ts`. LinkedIn URLs currently use the generic HTML metadata / Schema.org fallback only.
-- Tested three public LinkedIn job detail URLs through the same local compiled `previewOpportunityUrl()` service used by the deployed application:
-  - BlackStone eIT — Full Stack Developer (.NET/Angular)
-  - Webenia — Senior Full-Stack Software Engineer
-  - Procore Technologies — Staff Software Engineer, Backend & Full Stack
-- All three returned `outcome: partial`, not `ready`.
-- Each returned only a page-metadata title and short description snippet, both labelled **low confidence**. The title was the full LinkedIn page title (including employer/location/LinkedIn suffix), not a clean job-title field.
-- Company/client, locations, posted date, employment type, workplace type, department and team were empty in these results.
-- This does **not** meet the same extraction quality as the tested Ashby, Workable and Lever adapters. The supported behavior today is a best-effort partial result followed by manual review; users must correct the title and manually enter missing required fields.
-- LinkedIn pages can show a public job snippet while also displaying sign-in prompts; search indexing/public visibility does not guarantee that a server-side unauthenticated fetch exposes the full posting. Current public search results demonstrate this distinction (e.g. LinkedIn job detail pages can render a public title/employer/location/description excerpt alongside a sign-in prompt).
-- Do not add LinkedIn cookies, user credentials, session reuse, CAPTCHA handling, authwall bypasses or bot-control circumvention to Quick Capture. Do not assume an official read API is available to this project. Any future adapter must use only an explicitly permitted public/official access path and preserve safe manual fallback if LinkedIn blocks or limits anonymous access.
-- **Decision:** LinkedIn is not yet accepted as a fully supported Quick Capture provider. A dedicated, compliant adapter is a separate future enhancement; do not advertise parity with Ashby/Workable/Lever.
+The original anonymous-page probe showed that three public LinkedIn URLs exposed only partial, low-confidence page metadata (and one request was blocked). A later local title-pattern experiment separated a title and employer for two samples, but that experiment still depended on the server fetching LinkedIn. That implementation was removed before the v1.3.0 production release and must not be restored.
 
-No application code, Vercel settings, deployment, database data or Git state was changed during this compatibility probe.
+Current behavior is documented in the v1.3.0 release note: LinkedIn hosts are blocked before any server-side network lookup; the UI retains the original URL and directs the user to manual entry. No LinkedIn cookies, credentials, session reuse, undocumented endpoints, scraping libraries, authwall workarounds or bot-control circumvention are used.
 
+## 2026-11-08 ? LinkedIn compatibility probe (HISTORICAL; SUPERSEDED)
 
-## 2026-11-08 — Narrow LinkedIn page-title fallback improvement (LOCAL, NOT DEPLOYED)
+The original anonymous-page probe showed that three public LinkedIn URLs exposed only partial, low-confidence page metadata (and one request was blocked). A later local title-pattern experiment separated a title and employer for two samples, but that experiment still depended on the server fetching LinkedIn. That implementation was removed before the v1.3.0 production release and must not be restored.
 
-### Change
-- Added an opt-in LinkedIn public job-title parser for exact HTTPS LinkedIn job-detail URLs only: `linkedin.com/jobs/view/{numeric-id}` and `www.linkedin.com/jobs/view/{numeric-id}`.
-- When the public page title matches LinkedIn's observed format `<role> at <employer> — <location> | LinkedIn Jobs`, Quick Capture now separates the clean role title from the employer name.
-- The title and employer are both explicitly marked as **low-confidence page metadata**. The employer provenance label is `LinkedIn job page title pattern`; users must still verify both values.
-- The original posting URL is preserved. No additional LinkedIn fields are inferred: location, posted date, employment type, workplace type, team, department and compensation remain empty unless independently exposed by trusted structured metadata.
-- This parser does not use LinkedIn credentials, cookies, user sessions, CAPTCHA workarounds, authwall bypasses or a private API. Non-job LinkedIn paths and identical title patterns on unrelated hosts do not receive the special parsing.
-
-### Verification
-- Targeted real-page check against the three previously sampled public LinkedIn listings: two returned `ready` with clean title + employer (BlackStone eIT and Webenia); the third was blocked by LinkedIn and returned `blocked` without data.
-- Added regression coverage for the exact LinkedIn job path and for negative cases (LinkedIn search page and unrelated host).
-- All six capture-related server test files passed: **187/187 tests**.
-- Server TypeScript typecheck passed and server production build passed.
-- No database or API write was performed. No production or Preview deployment was made.
-- The updated implementation is local only; the persistent QA Preview still runs the previously deployed build until a new reviewed Preview deployment is made.
-
-**Decision:** small, compliant LinkedIn fallback improvement accepted locally. This improves clean title/employer extraction when LinkedIn exposes the familiar public job-page title, but it is not a full LinkedIn adapter and does not guarantee extraction when LinkedIn blocks anonymous access.
-
+Current behavior is documented in the v1.3.0 release note: LinkedIn hosts are blocked before any server-side network lookup; the UI retains the original URL and directs the user to manual entry. No LinkedIn cookies, credentials, session reuse, undocumented endpoints, scraping libraries, authwall workarounds or bot-control circumvention are used.
 
 ## 2026-11-08 — LinkedIn broader-coverage feasibility assessment (RESEARCH ONLY)
 
@@ -350,13 +334,14 @@ No application code, Vercel settings, deployment, database data or Git state was
 
 ## v1.3.0 production release — 8 November 2026
 
-- **Release:** Quick Capture v1.3.0; Git release tag ui-v1.3.0; production application at [https://launchboard-drab.vercel.app](https://launchboard-drab.vercel.app).
+- **Release:** Quick Capture v1.3.0; Git release tag ui-v1.3.0; production application at https://launchboard-drab.vercel.app. The production deployment is READY: dpl_2AS7rWRJZVU4YAr8nNyR3bHuWY2D, built from commit 898a743d18af128f6dea1d21013623ba74744201; immutable URL https://launchboard-kdc1pt0iy-youssef-workplace.vercel.app.
 - **Scope:** review-first metadata suggestions from supported public employer/ATS pages, field-level provenance/confidence, editable structured job details, duplicate warnings, manual fallback, and the in-app release spotlight/history.
 - **LinkedIn safety:** LinkedIn job/detail/search/regional URLs are rejected before any server network request. The UI preserves the pasted URL and sends the user to manual entry. The former page-title parsing special case was removed. No LinkedIn page content is fetched, scraped or copied by Launchboard.
 - **Database:** migration 005_opportunity_job_details.sql was already present in the live migration history; it was not rerun during this deployment. No opportunity data was modified by this release process.
 - **Edge protection:** the existing active Vercel WAF rule remains in place for POST /api/capture/preview (five requests per 60 seconds per IP, deny after limit). No WAF change was required for this release.
 - **Production environment metadata:** CAPTURE_PREVIEW_ENABLED and TRUSTED_ORIGINS were inspected without decrypting secrets and were not changed during this release. The temporary QA-origin cleanup remains a separate operational item; do not expose or copy secret values.
-- **Post-deploy read-only checks:** homepage and static asset checks, /api/health, and /api/ready (db=ok) are required and recorded after the deployment completes. The protected opportunities endpoint should return the expected unauthenticated 401.
+- **Post-deploy read-only checks passed:** canonical homepage and generated JS/CSS assets returned HTTP 200; /api/health returned HTTP 200 (status=ok); /api/ready returned HTTP 200 (status=ok, db=ok); unauthenticated /api/opportunities returned HTTP 401 as expected.
+- **Vercel build:** the root install command is npm ci --include=dev so workspace TypeScript/Vite build dependencies are present. Vercel built the 1,644-module Vite application and deployed the API catch-all in Frankfurt. The final catch-all ES2020 TypeScript check passed; no Array.at compiler diagnostics remained.
 - **Automated verification:** frontend/domain 670/670 tests, server 615/615 tests, frontend TypeScript check, server TypeScript check, Vite production build (1,644 modules), and server production build passed.
 - **User-data boundary:** no production CRUD test, account mutation, opportunity save, migration execution or destructive Preview test was performed. The persistent Preview shares the production TiDB database.
 - **Remaining limitation:** the three user-tested Preview examples (Ashby/Chatbase, Workable/EVA Pharma, Lever/SOUM) reached the ready review state, but the report contained provenance labels rather than complete field values. Complete content accuracy and a fresh authenticated production browser acceptance are not claimed. The separate post-migration backup restore and live runtime-grant audit remain outstanding checks.
