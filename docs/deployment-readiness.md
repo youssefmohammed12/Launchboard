@@ -277,12 +277,6 @@ The original anonymous-page probe showed that three public LinkedIn URLs exposed
 
 Current behavior is documented in the v1.3.0 release note: LinkedIn hosts are blocked before any server-side network lookup; the UI retains the original URL and directs the user to manual entry. No LinkedIn cookies, credentials, session reuse, undocumented endpoints, scraping libraries, authwall workarounds or bot-control circumvention are used.
 
-## 2026-11-08 ? LinkedIn compatibility probe (HISTORICAL; SUPERSEDED)
-
-The original anonymous-page probe showed that three public LinkedIn URLs exposed only partial, low-confidence page metadata (and one request was blocked). A later local title-pattern experiment separated a title and employer for two samples, but that experiment still depended on the server fetching LinkedIn. That implementation was removed before the v1.3.0 production release and must not be restored.
-
-Current behavior is documented in the v1.3.0 release note: LinkedIn hosts are blocked before any server-side network lookup; the UI retains the original URL and directs the user to manual entry. No LinkedIn cookies, credentials, session reuse, undocumented endpoints, scraping libraries, authwall workarounds or bot-control circumvention are used.
-
 ## 2026-11-08 — LinkedIn broader-coverage feasibility assessment (RESEARCH ONLY)
 
 ### Platform/API findings
@@ -291,9 +285,10 @@ Current behavior is documented in the v1.3.0 release note: LinkedIn hosts are bl
 - The documented LinkedIn Job Posting API is intended for approved ATS/job-distribution partners to create, update, renew or close job listings; it is not a general job-seeker API for retrieving/searching LinkedIn listings. LinkedIn's current overview says it is not accepting new partnerships for this Job Posting API and directs prospective access requests to Apply Connect. Access is restricted to approved developers under an API agreement: https://learn.microsoft.com/en-us/linkedin/talent/job-postings/api/overview
 - **Do not expand automated LinkedIn page fetching, undocumented endpoints, scraping libraries/services, cookies, logged-in sessions, authwall workarounds or browser automation.** No supported general read/search API for job listings was identified in the official documentation reviewed.
 
-### Important review of the existing small LinkedIn title fallback
-- The local LinkedIn title cleanup introduced in the preceding step still depends on the generic server-side Quick Capture flow fetching a LinkedIn URL. It uses no LinkedIn cookies or login, but it remains automated software access to LinkedIn content.
-- Do not broaden or deploy that fetch-based LinkedIn behavior. Before the next Preview release, remove/disable the LinkedIn automatic-fetch exception and show a LinkedIn-specific manual-import path instead. This research pass made no source-code or deployment changes.
+### Current implementation status
+- The earlier title-pattern fallback was removed before the v1.3.0 deployment because it depended on the generic server-side fetcher reading LinkedIn pages.
+- LinkedIn URL detection and the LinkedIn-specific manual-entry path are implemented in v1.3.0. The server rejects LinkedIn hosts before network lookup.
+- The remaining future candidates are user-pasted job-details parsing and an optional separately supplied employer/ATS URL. Neither is implemented in v1.3.0.
 
 ### Recommended compliant coverage strategy
 
