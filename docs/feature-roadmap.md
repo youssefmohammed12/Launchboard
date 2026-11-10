@@ -10,7 +10,7 @@ Launchboard remains a personal opportunity-management and career-tracking worksp
 | **v1.1.0** | Responsive workspace | Responsive phone/tablet/desktop UI, navigation and layout refinements | Released |
 | **v1.2.0** | **Action Center** | Tasks per opportunity, priorities, due dates, completion, overdue/Today/Upcoming/Unscheduled views, Dashboard Today section and Calendar task events | Released — production deployment and `ui-v1.2.0` Git release |
 | **v1.3.0** | Quick Capture | Review-first URL capture, structured job details, field provenance, duplicate warnings and manual fallback | Released to production and tagged ui-v1.3.0 (2026-11-08); LinkedIn automatic lookup disabled, broader paste/ATS workflow deferred |
-| **v1.3.5** | Account & Opportunity Workflow Polish | Profile display name, password change, confirmed account deletion, branded verification/recovery/password-change emails, Contract opportunity type, improved job-detail normalization and capture fallback, additive migrations 006–007 | Candidate prepared (2026-11-10); hosted migrations 006–007 applied and verified; exact-SHA Preview and Production deployment pending |
+| **v1.3.5** | Account & Opportunity Workflow Polish | Profile display name, password change, confirmed account deletion, branded verification/recovery/password-change emails, Contract opportunity type, improved job-detail normalization and capture fallback, additive migrations 006–007 | Released to Production (2026-11-10); tag `ui-v1.3.5`; deployed SHA `9a15268` |
 | **v1.4.0** | Better Insights | Response, interview and offer conversion; response time; best-performing source; time in stage; honest filters and sample sizes | Planned |
 | **v1.5.0** | Career Resources | Reusable CV versions, cover-letter templates, certificates, portfolio links, descriptions and version references linked to each opportunity | Planned |
 | **v1.6.0** | Weekly Goals & Review | Weekly application/follow-up targets, completed-task progress, stale-opportunity review and week-over-week activity | Planned |
@@ -35,7 +35,7 @@ These ideas are intentionally not committed to a release yet:
 
 ## Current release status
 
-v1.3.0 Quick Capture remains the deployed Production version. A v1.3.5 Account Settings & Email Polish candidate is prepared locally. It adds signed-in profile display-name controls, protected password change, confirmed account deletion and branded verification/recovery/password-change emails. Hosted TiDB migration 006 has been applied after a fresh verified backup and isolated restore; live schema/history and runtime-grant checks passed. The v1.3.5 application source is still local, uncommitted and undeployed. See `docs/v1.3.5-release-notes.md` and the current 10 November 2026 records in `docs/deployment-readiness.md`. LinkedIn automatic fetching remains disabled; the compliant paste/ATS workflow is separate future work.
+v1.3.5 Account & Opportunity Workflow Polish was released to Production on 10 November 2026. The release includes Account Settings, branded account emails, Contract opportunity type, normalized job details/URLs, stricter Quick Capture fallback and calendar/dashboard date corrections. Hosted TiDB migrations 006–007 are applied and verified. The exact deployed source SHA is `9a152682d2bc87e8490d2dbca86e92fa15a2031a`, tagged `ui-v1.3.5`. See `docs/v1.3.5-release-notes.md` and `docs/deployment-readiness.md`. LinkedIn automatic fetching remains disabled; the compliant paste/ATS workflow is separate future work.
 
 ## Stage 2 Vercel WAF publication — 2026-11-07
 

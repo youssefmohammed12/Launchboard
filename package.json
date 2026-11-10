@@ -32,6 +32,8 @@
     "db:migrate": "npm run db:migrate --workspace @launchboard/server",
     "db:migrate:compiled": "npm run db:migrate:compiled --workspace @launchboard/server",
     "db:verify-live": "npm run db:verify-live --workspace @launchboard/server",
+    "release:prepare": "node deployment/release.mjs --prepare",
+    "release:production": "node deployment/release.mjs --production",
     "pretest:focus": "npm run build:domain",
     "test:focus": "node focus-test.cjs",
     "typecheck": "tsc --noEmit"

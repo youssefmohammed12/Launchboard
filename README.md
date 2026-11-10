@@ -170,6 +170,8 @@ VITE_DATA_MODE=api npm run dev
 | `npm run build:server` | Compile the backend |
 | `npm run typecheck:server` | Type-check the backend |
 | `npm run test:focus` | Run the Playwright dialog-focus checks |
+| `npm run release:prepare` | Build, stage and checksum-verify the reusable Vercel prebuilt package without uploading it |
+| `npm run release:production` | Upload the verified package and create one confirmed Production deployment; requires `VERCEL_TOKEN` |
 
 The Playwright focus suite needs browser binaries installed once:
 
@@ -217,7 +219,7 @@ npm run test:focus
 
 The live demo is hosted on Vercel at [launchboard-drab.vercel.app](https://launchboard-drab.vercel.app) and uses TiDB Cloud Serverless for the authenticated workspace.
 
-The root `vercel.json` routes `/api/*` requests, including nested authentication and capture endpoints, through the catch-all Vercel function. Other paths are rewritten to the SPA entry point. The separate `deployment/vercel.json` is retained for the project's prebuilt-upload workflow.
+The root `vercel.json` routes `/api/*` requests, including nested authentication and capture endpoints, through the catch-all Vercel function. Other paths are rewritten to the SPA entry point. The separate `deployment/vercel.json` is used by the reusable prebuilt-upload workflow. Run `npm run release:prepare` for a local build/package/checksum preflight, or `npm run release:production` for the explicitly confirmed one-shot Production upload and read-only smoke checks. The latter requires `VERCEL_TOKEN`; it does not create a Preview, run migrations, send email, or perform account/record CRUD. Follow the exact-SHA Preview gate in the [deployment guide](docs/deployment-readiness.md) whenever a release requires Preview acceptance.
 
 Production credentials are configured in the hosting environment. Never commit real `.env` files, SMTP app passwords, database passwords, CSRF secrets, or other credentials. The repository includes only `server/.env.example` as a safe template.
 

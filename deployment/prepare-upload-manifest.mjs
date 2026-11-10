@@ -1,37 +1,41 @@
 import { createHash } from 'node:crypto';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const staticFiles = [
-  { file: 'package.json', path: 'deployment/package.json' },
-  { file: 'vercel.json', path: 'deployment/vercel.json' },
-  { file: 'index.html', path: 'deployment/index.html' },
-  { file: 'favicon.svg', path: 'public/favicon.svg' },
-];
+const stageRoot = resolve(dirname(fileURLToPath(import.meta.url)), 'release-stage');
 
-const assetNames = (await readdir('deployment/assets', { withFileTypes: true }))
-  .filter((entry) => entry.isFile())
-  .map((entry) => entry.name)
-  .sort();
+async function collectFiles(directory, prefix = '') {
+  const files = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const relativePath = prefix ? prefix + '/' + entry.name : entry.name;
+    const absolutePath = resolve(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...await collectFiles(absolutePath, relativePath));
+    } else if (entry.isFile()) {
+      files.push(relativePath);
+    }
+  }
+  return files;
+}
 
-const files = [
-  ...staticFiles,
-  ...assetNames.map((name) => ({
-    file: `assets/${name}`,
-    path: `deployment/assets/${name}`,
-  })),
-  { file: 'api/[...].js', path: 'deployment/api/[...].js' },
-];
+const filePaths = (await collectFiles(stageRoot)).sort();
+if (filePaths.length === 0) {
+  throw new Error('The staged release directory is empty. Run deployment/release.mjs first.');
+}
 
 const entries = [];
-for (const item of files) {
-  const data = await readFile(item.path);
+for (const file of filePaths) {
+  const path = resolve(stageRoot, ...file.split('/'));
+  const data = await readFile(path);
   entries.push({
-    file: item.file,
+    file,
     size: data.length,
     sha1: createHash('sha1').update(data).digest('hex'),
     base64: data.toString('base64'),
   });
 }
 
-await writeFile('deployment/upload-manifest.json', JSON.stringify(entries));
+const manifestPath = resolve(dirname(fileURLToPath(import.meta.url)), 'upload-manifest.json');
+await writeFile(manifestPath, JSON.stringify(entries));
 console.log(JSON.stringify(entries.map(({ file, size, sha1 }) => ({ file, size, sha1 })), null, 2));

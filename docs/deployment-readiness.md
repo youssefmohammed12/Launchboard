@@ -1,34 +1,37 @@
 # Launchboard deployment
 
-## Current release and database status — 10 November 2026
+## Current release and database status — 11 November 2026
 
-- **Deployed application:** v1.3.0 Quick Capture remains the Production version. Latest deployment: `dpl_4ePAkd6wgGTDMz1qmCEKKo8TKRiX`, from commit `4c1b3a035cb6a7c2507b546456d3edd39a0710e3`.
-- **Local candidate:** v1.3.5 Account & Opportunity Workflow Polish is implemented and documented locally, and its release entry is present in the in-app What's New history. The API-mode frontend, API handler and 7-file upload manifest have been refreshed and preflighted. It is not committed, pushed, preview-deployed or production-deployed.
-- **Hosted TiDB:** migrations 006 and 007 are applied to the dedicated `launchboard` database. Migration 006 followed a fresh verified backup and isolated restore; migration 007 followed a fresh successful SQL/GZIP export, 24/24 download and SHA-256/GZIP integrity verification. Live postflight confirms history 001–007, Contract in the opportunities CHECK definition, CHECK enforcement enabled, and unchanged user/opportunity counts (5/13). The read-only runtime-grant audit for `lb_app` remains scoped to `launchboard.*`.
-- **Remaining release checks:** exact-source-SHA commit/push, Preview build and non-destructive routing/API checks, then the Production deployment and live non-destructive smoke requested for this release. The persistent Preview shares Production TiDB; do not use it for destructive account tests.
-- **Outstanding verification limitation:** the rollback-only cascade probe using the actual restricted runtime credential was not run. The live runtime password was not retrieved. The new email HTML was not visually checked in Gmail and no test email was sent.
+- **Deployed application:** v1.3.5 Account & Opportunity Workflow Polish, including the email Spam/Junk guidance patch and responsive account-header refinement, is live on Production. Latest deployment `dpl_FBgtdg1WDWdktTMQ5btcFU6e8TFF`, READY, target Production, URL `https://launchboard-b3xc1cih4-youssef-workplace.vercel.app`; deployment metadata references HEAD `baebd941fe5d9d301aca14614e2a0db3af900ae9` on `feature/quick-capture-v1.3`.
+- **Source/package boundary:** the Vercel deployment metadata points to branch `feature/quick-capture-v1.3` and HEAD `baebd941fe5d9d301aca14614e2a0db3af900ae9`. The prebuilt package also included the local `src/styles.css` account-header refinement; no new Git commit or push was made for this deployment. `origin/main` remains unchanged at `4c1b3a035cb6a7c2507b546456d3edd39a0710e3`.
+- **Earlier Preview:** `dpl_7ZiFNqXggqnYaLMZgerWpg3JdMuN`, READY, from the earlier email-guidance SHA `49eda0264dcb9765ffd06cadde9490539401daf6`. It passed its own SPA, asset, health/readiness and unauthenticated API checks; it was not the exact prebuilt package later sent to Production.
+- **Production aliases:** `launchboard-drab.vercel.app` and `launchboard-youssef-workplace.vercel.app` are attached to latest deployment `dpl_FBgtdg1WDWdktTMQ5btcFU6e8TFF`.
+- **Hosted TiDB:** migrations 001–007 are applied to `launchboard`. Migration 006 followed a fresh verified backup and isolated restore; migration 007 followed a fresh successful SQL/GZIP export, 24/24 download and SHA-256/GZIP integrity verification. Live postflight confirms Contract in the opportunity CHECK, CHECK enforcement enabled, and unchanged user/opportunity counts (5/13). The read-only `lb_app` grant audit remains scoped to `launchboard.*`.
+- **Production smoke:** canonical homepage, login route, favicon and generated JS/CSS assets returned HTTP 200; `/api/health` and `/api/ready` returned healthy JSON (`db=ok`); the unauthenticated API auth route returned the expected JSON authentication guard. The account header passed 15/15 viewport checks; no browser runtime errors or recent Vercel runtime errors were found. The direct Production deployment completed without a separate Preview deployment for this exact prebuilt package.
+- **Outstanding verification limitation:** the rollback-only cascade probe using the actual restricted runtime credential was not run. The live runtime password was not retrieved. Email HTML was not visually verified in Gmail, and the mailbox folder for a fresh real-recipient verification message remains to be checked by the user. No authenticated or destructive account test was run against a real user during this patch deployment.
 
 ## Current production deployment
 
-Last checked: **8 November 2026**.
+Last checked: **11 November 2026 (v1.3.5 email guidance and responsive account-header prebuilt release)**.
 
 - **Application:** https://launchboard-drab.vercel.app.
 - **Hosting:** Vercel Hobby, Node.js 24.x, Frankfurt region (fra1).
 - **Database:** TiDB Cloud Serverless v8.5.3, eu-central-1, database launchboard.
-- **Latest production deployment:** `dpl_4ePAkd6wgGTDMz1qmCEKKo8TKRiX` (READY, Production target).
-- **Deployed Git commit:** `4c1b3a035cb6a7c2507b546456d3edd39a0710e3` (`fix: restore nested Vercel API routing`).
-- **Assigned production aliases:** `launchboard-drab.vercel.app`, `launchboard-youssef-workplace.vercel.app`, and `launchboard-git-main-youssef-workplace.vercel.app`.
-- The v1.3.0 production release includes Quick Capture, supported employer/ATS public page suggestions, field-level provenance, structured job details, duplicate warnings, manual fallback and the in-app What's New experience. LinkedIn URLs are retained for manual entry; automatic LinkedIn access is disabled.
+- **Latest production deployment:** `dpl_FBgtdg1WDWdktTMQ5btcFU6e8TFF` (READY, Production target; responsive account-header prebuilt package).
+- **Immutable deployment URL:** `https://launchboard-b3xc1cih4-youssef-workplace.vercel.app`.
+- **Deployment source metadata:** branch `feature/quick-capture-v1.3`, HEAD `baebd941fe5d9d301aca14614e2a0db3af900ae9`. The deployed prebuilt artifacts also contain the local `src/styles.css` account-header refinement; no new commit or push was made for that CSS change.
+- **Assigned production aliases:** `launchboard-drab.vercel.app` and `launchboard-youssef-workplace.vercel.app`.
+- The v1.3.5 production release includes Account Settings, branded verification/recovery/password-change emails, Contract opportunity type, normalized work details and URLs, stricter Quick Capture fallback, improved opportunity details, calendar title labels, corrected Dashboard seven-day range, and the in-app What's New release history. The 11 November patch adds Spam/Junk guidance after email-triggering auth actions and a reason-for-receipt line in HTML/plain-text account emails; Gmail SMTP and all auth triggers remain unchanged. LinkedIn URLs remain manual; automatic LinkedIn access is disabled.
 
 ### Post-deployment read-only smoke
 
-- Canonical homepage: HTTP 200.
-- Referenced JavaScript and CSS assets: HTTP 200.
+- Canonical Production homepage `/`, `/login`, and `/favicon.svg`: HTTP 200.
+- Latest prebuilt package assets `assets/index-DYYvvS-V.css` and `assets/index-gnWS-cI_.js`: HTTP 200 (7/7 release files uploaded with manifest checksums verified).
 - /api/health: HTTP 200 (status=ok).
 - /api/ready: HTTP 200 (status=ok, db=ok).
-- Unauthenticated `/api/auth/me`, `/api/auth/csrf`, and `/api/opportunities`, plus `POST /api/capture/preview`: expected HTTP 401 authentication guards, not 404 or SPA HTML.
-- A synthetic `POST /api/auth/login` with a reserved `.invalid` email and dummy password reached the pre-authentication guard and returned HTTP 403, not 404. No real credentials or authenticated session were used.
-- Vercel deployment build completed and state is READY. The final API catch-all source was also checked with the repository's ES2020 compiler settings after replacing five unsupported Array.at() usages with equivalent index access.
+- Unauthenticated `/api/auth/me`, `/api/auth/csrf`, `/api/account/profile`, and `/api/opportunities`: expected HTTP 401 authentication guards, not 404 or SPA HTML.
+- Both `launchboard-drab.vercel.app` and `launchboard-youssef-workplace.vercel.app` returned HTTP 200 for `/` and `/login`. No real credentials or authenticated session were used.
+- Vercel Production deployment `dpl_FBgtdg1WDWdktTMQ5btcFU6e8TFF` is READY. Vercel reported a 4-second build; the seven-file prebuilt upload completed 7/7. The account-header layout passed 15/15 viewport checks, no browser runtime errors were detected, and the recent Vercel runtime-error scan was clean.
 
 No opportunity records, accounts or database schema were changed during post-deployment verification. No migration was re-run. A production authenticated CRUD test was intentionally not performed.
 
@@ -101,7 +104,33 @@ A Git-connected Vercel project should use the repository root as its Root Direct
 
 ## Prebuilt deployment helpers
 
-The `deployment/` directory retains the scripts used for manual prebuilt releases and smoke tests. Bundled API code, generated assets, the upload manifest, and base64 transfer files are generated artifacts and are intentionally excluded from Git. Rebuild them from source when the prebuilt workflow is needed.
+The `deployment/` directory contains the reusable prebuilt release runner and its lower-level build, manifest and smoke helpers. Bundled API code, generated assets, the upload manifest, and staged release files are generated artifacts and are intentionally excluded from Git.
+
+### Reusable one-command release workflow
+
+Run these from the repository root. In Windows PowerShell, use `npm.cmd` so the command bypasses a restricted `npm.ps1` execution-policy shim; other shells can use `npm`.
+
+```powershell
+npm.cmd run release:prepare
+```
+
+This is the safe default. It builds the frontend with `VITE_DATA_MODE=api`, bundles the Node 24 Vercel API handler, assembles the clean seven-file (current package) release under `deployment/release-stage/`, writes `deployment/upload-manifest.json` with file sizes and SHA-1 hashes, and runs `deployment/verify-upload-manifest.mjs`. It performs **no Vercel network requests**, reads no `.env` files, and does not connect to TiDB, run migrations, send email, or change Git state.
+
+After reviewing the exact changes and receiving explicit Production approval, run:
+
+```powershell
+$env:VERCEL_TOKEN = "<your Vercel token in this terminal only>"
+npm.cmd run release:production
+Remove-Item Env:VERCEL_TOKEN
+```
+
+The Production command rebuilds and re-verifies the package, displays the branch/HEAD and dirty working-tree paths, and requires the exact interactive confirmation `DEPLOY LAUNCHBOARD TO PRODUCTION`. It uploads the checksummed files to the existing Launchboard Vercel project (up to four parallel uploads), creates **one** Production deployment, polls it until READY/ERROR, then performs read-only smoke checks on the immutable deployment URL and both Production aliases: homepage, login SPA route, generated JS/CSS assets, favicon, health, TiDB readiness, and unauthenticated JSON auth guards. It does not create a Preview deployment.
+
+The script uses the existing project/team IDs as non-secret defaults; `VERCEL_PROJECT_ID` and `VERCEL_TEAM_ID` can override them. The only credential required is `VERCEL_TOKEN`, supplied through the process environment. The build, bundling, manifest and Git-inspection subprocesses receive a sanitized environment without that token; it is used only by the Vercel API upload, create and poll requests. Never put the token in source files, `.env`, command arguments, screenshots, or Git.
+
+**Release policy:** this command is a direct-to-Production prebuilt path, not a substitute for the mandatory exact-SHA Preview gate above. Use it only for a reviewed candidate when direct Production is explicitly approved. When a release requires Preview acceptance, complete that gate with the exact candidate and the same deployment configuration before Production. The script itself never migrates the database or tests real-user CRUD.
+
+If the script fails after Vercel has created a deployment, inspect that deployment before retrying; it deliberately does not create a second deployment automatically.
 
 ## Security and operational notes
 
@@ -372,7 +401,7 @@ Current behavior is documented in the v1.3.0 release note: LinkedIn hosts are bl
 - **User-data/auth boundary:** no real account credentials or authenticated session were used; no production CRUD test, account mutation, opportunity save, migration execution or destructive Preview test was performed. The persistent Preview shares the production TiDB database.
 - **Remaining limitation:** the three user-tested Preview examples (Ashby/Chatbase, Workable/EVA Pharma, Lever/SOUM) reached the ready review state, but the report contained provenance labels rather than complete field values. Complete content accuracy and a fresh authenticated production browser acceptance are not claimed. The separate post-migration backup restore and live runtime-grant audit remain outstanding checks.
 
-The concise, published version history is maintained in docs/v1.2-release-notes.md and docs/v1.3-release-notes.md. Detailed v1.2/v1.3 design and staged implementation documents are intentionally retained only in the local working copy.
+The concise version history is maintained in `docs/v1.2-release-notes.md`, `docs/v1.3-release-notes.md`, and `docs/v1.3.5-release-notes.md`. Detailed v1.2/v1.3 design and staged implementation documents are intentionally retained only in the local working copy.
 
 
 ## 2026-11-10 — Account Settings implementation design snapshot (historical; migration status superseded below)

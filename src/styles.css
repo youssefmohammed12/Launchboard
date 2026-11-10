@@ -518,6 +518,30 @@ dialog[aria-labelledby="modal-title"] {
   .lb-content, .lb-local-content { padding-inline: 24px; }
 }
 
+/*
+ * The full desktop action row can outgrow the available header width before
+ * the phone breakpoint. Switch to the existing account popover early enough
+ * that the identity and Sign out controls never compete for the same space.
+ */
+@media (max-width: 1600px) and (min-width: 641px) {
+  .lb-topbar-actions { gap: 12px; }
+  .lb-topbar-actions > .lb-migration-button,
+  .lb-topbar-actions > .lb-user-block,
+  .lb-topbar-actions > .lb-signout-button { display: none; }
+  .lb-mobile-account-menu { display: block; }
+}
+
+/* Keep the compact header usable across the tablet-width desktop layout. */
+@media (max-width: 1080px) and (min-width: 641px) {
+  .lb-topbar-actions { gap: 8px; }
+  .lb-topbar-actions > .lb-sync-state,
+  .lb-topbar-actions > .lb-whats-new-button { display: none; }
+  .lb-topbar-add-full-label,
+  .lb-topbar-quick-capture-full-label { display: none; }
+  .lb-topbar-add-short-label,
+  .lb-topbar-quick-capture-short-label { display: inline; }
+}
+
 @media (max-width: 860px) and (min-width: 641px) {
   .lb-app-shell { display: flex; flex-direction: column; }
   .lb-sidebar {
