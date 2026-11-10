@@ -12,6 +12,7 @@ const message: EmailMessage = {
   to: 'person@example.test',
   subject: 'Verify your email',
   text: 'Open this link to verify your email: https://launchboard.example/#verifyEmail=secret-token',
+  html: '<p>Verify your email</p>',
 };
 
 afterEach(() => {
@@ -48,6 +49,7 @@ describe('sendEmail', () => {
       to: message.to,
       subject: message.subject,
       text: message.text,
+      html: message.html,
     });
     expect(close).toHaveBeenCalledOnce();
   });

@@ -44,6 +44,14 @@ afterEach(() => {
 });
 
 describe('API-mode AuthScreen account actions', () => {
+  it('keeps legacy sign-in flexible while requiring a longer password for new accounts', () => {
+    renderScreen();
+    expect(screen.getByLabelText('Password')).not.toHaveAttribute('minLength');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create one' }));
+    expect(screen.getByLabelText('Password')).toHaveAttribute('minLength', '15');
+  });
+
   it('captures a verification token, removes it from the address bar and waits for user confirmation', async () => {
     window.history.pushState({}, '', '/#verifyEmail=secret-verify-token&keep=1');
     vi.mocked(verifyEmail).mockResolvedValue({

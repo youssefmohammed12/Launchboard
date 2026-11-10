@@ -32,7 +32,7 @@ const sourceDir = join(process.cwd(), 'packages', 'domain', 'src');
 
 describe('controlled values', () => {
   it('keeps the persisted allowlists stable', () => {
-    expect(OPPORTUNITY_TYPES).toEqual(['Internship', 'Full-time', 'Part-time', 'Freelance']);
+    expect(OPPORTUNITY_TYPES).toEqual(['Internship', 'Full-time', 'Part-time', 'Freelance', 'Contract']);
     expect(OPPORTUNITY_STATUSES).toEqual(['Saved', 'Applied', 'Interview', 'Offer', 'Rejected']);
     expect(PRIORITIES).toEqual(['Low', 'Medium', 'High']);
     expect(WORKPLACE_TYPES).toEqual(['Remote', 'Hybrid', 'On-site']);

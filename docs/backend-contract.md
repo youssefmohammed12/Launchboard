@@ -1,6 +1,6 @@
 # Launchboard Backend Contract
 
-**Status: implemented contract with an in-progress v1.2 extension.** The React/Vite frontend supports a default localStorage workspace and an opt-in authenticated API workspace. The Express/TypeScript API, shared domain package, user-scoped opportunity aggregate, existing nested workspace, bulk actions/Undo, email verification and password recovery are implemented. The v1.2 feature branch adds opportunity-owned tasks to the shared aggregate, emits JSON backup schema v2 and retains v1 import compatibility. Additive database migration 004 is authored and structurally tested, but has **not** been applied to the local or production database; the deployed v1.1.0 schema remains at migration 003. Local database and release checks are documented in docs/deployment-readiness.md. This document describes the current Node.js + Express + TypeScript + MySQL-compatible backend contract.
+**Status: implemented contract, including the local v1.3.5 Account Settings candidate.** The React/Vite frontend supports a default localStorage workspace and an opt-in authenticated API workspace. The Express/TypeScript API, shared domain package, user-scoped opportunity aggregate, nested workspace, bulk actions/Undo, email verification, password recovery and account self-service routes are implemented. Additive migrations 001–007 are present in the repository; the hosted Production TiDB database records migrations 001–007. Migration 007 adds Contract to the opportunity type constraint; the new definition is verified in the live opportunities table. Migration 006 adds the optional profile display name. The workstation's local XAMPP database is separate and was not changed by the hosted migration. Account Settings and branded email changes remain uncommitted and undeployed; see `docs/v1.3.5-release-notes.md` and `docs/deployment-readiness.md`.
 
 The browser app supports localStorage and opt-in API modes. `launchboard.opportunities.v1`, `launchboard.recovery.raw.v1` and `launchboard.views.v1` remain browser-local keys; API mode does not replace or delete them. Saved Views remain local preferences.
 
@@ -199,7 +199,8 @@ another database. Do not touch `healthbridge` or `nova_home`.
 | Column | Type | Constraints |
 |---|---|---|
 | `id` | `CHAR(36)` | PK, UUID |
-| `email` | `VARCHAR(254)` | NOT NULL, unique, normalized lowercase, `utf8mb4_unicode_ci` |
+| `email` | `VARCHAR(254)` | NOT NULL, unique, normalized lowercase, `utf8mb4_unicode_ci`; sign-in identifier is read-only in Account Settings |
+| `display_name` | `VARCHAR(80)` | NOT NULL DEFAULT `''`; user-editable optional profile name, added by migration 006 |
 | `password_hash` | `VARCHAR(255)` | NOT NULL |
 | `opportunity_revision` | `BIGINT UNSIGNED` | NOT NULL DEFAULT 0; increments on any opportunity change |
 | `created_at` | `DATETIME(3)` | NOT NULL, UTC |
@@ -253,7 +254,7 @@ Constraints and indexes:
 - `UNIQUE (user_id, public_id)`.
 - `INDEX (user_id, deleted_at, position, public_id)` for ordered collection reads.
 - `INDEX (user_id, deleted_at, archived_at)` for active/archived views.
-- `CHECK (type IN ('Internship','Full-time','Part-time','Freelance'))`.
+- `CHECK (type IN ('Internship','Full-time','Part-time','Freelance','Contract'))`.
 - `CHECK (status IN ('Saved','Applied','Interview','Offer','Rejected'))`.
 - `CHECK (priority IN ('Low','Medium','High'))`.
 - `CHECK (version >= 1)`.

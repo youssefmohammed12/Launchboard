@@ -385,7 +385,7 @@ describe('parseBackupJson', () => {
         { ...minimalRecord, id: '' },
         { ...minimalRecord, id: 'no-title', title: '   ' },
         { ...minimalRecord, id: 'no-company', company: '' },
-        { ...minimalRecord, id: 'bad-type', type: 'Contract' },
+        { ...minimalRecord, id: 'bad-type', type: 'Unsupported' },
         { ...minimalRecord, id: 'bad-status', status: 'Ghosted' },
         valid,
       ],

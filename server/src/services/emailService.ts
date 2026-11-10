@@ -5,6 +5,7 @@ export interface EmailMessage {
   to: string;
   subject: string;
   text: string;
+  html?: string;
 }
 
 export class EmailDeliveryError extends Error {
@@ -49,6 +50,7 @@ export async function sendEmail(
       to: message.to,
       subject: message.subject,
       text: message.text,
+      ...(message.html ? { html: message.html } : {}),
     });
   } catch {
     // Do not retain the SMTP/provider error; it may contain request details.

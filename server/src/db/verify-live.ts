@@ -331,6 +331,12 @@ export function evaluateSchema(snapshot: SchemaSnapshot): string[] {
     collation: 'utf8mb4_unicode_ci',
     nullable: false,
   });
+  expectColumn('users', 'display_name', {
+    dataType: 'varchar',
+    charLength: 80,
+    collation: 'utf8mb4_unicode_ci',
+    nullable: false,
+  });
   expectColumn('users', 'created_at', {
     dataType: 'datetime',
     precision: 3,

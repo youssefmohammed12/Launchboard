@@ -25,7 +25,8 @@ export type ApiErrorCode =
   | 'ALREADY_RESTORED'
   | 'DUPLICATE_REQUEST_ID'
   | 'STALE_REVISION'
-  | 'INVALID_BACKUP';
+  | 'INVALID_BACKUP'
+  | 'ACCOUNT_CHANGED';
 
 export type ApiErrorDetails = Record<string, unknown>;
 

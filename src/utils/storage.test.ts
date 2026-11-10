@@ -405,7 +405,7 @@ describe('loadOpportunities', () => {
       { ...minimalRecord, id: '' },
       { ...minimalRecord, title: '   ' },
       { ...minimalRecord, company: '' },
-      { ...minimalRecord, type: 'Contract' },
+      { ...minimalRecord, type: 'Unsupported' },
       { ...minimalRecord, status: 'Ghosted' },
       { ...minimalRecord, id: 'kept' },
     ]);
@@ -816,7 +816,7 @@ describe('normalizeOpportunityRecord', () => {
       opportunity: null,
       failure: 'missing-id',
     });
-    expect(normalizeOpportunityRecord({ ...minimalRecord, type: 'Contract' })).toMatchObject({
+    expect(normalizeOpportunityRecord({ ...minimalRecord, type: 'Unsupported' })).toMatchObject({
       opportunity: null,
       failure: 'invalid-type',
     });

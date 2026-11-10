@@ -3,16 +3,20 @@ import { ChevronDown, LogOut } from 'lucide-react';
 
 interface Props {
   email: string;
+  displayName?: string;
   disabled?: boolean;
   onMigrate: () => void;
+  onSettings: () => void;
   onSignOut: () => void;
 }
 
 /** Compact account access for the phone header; desktop keeps its full account controls. */
 export function MobileAccountMenu({
   email,
+  displayName = '',
   disabled = false,
   onMigrate,
+  onSettings,
   onSignOut,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -55,7 +59,7 @@ export function MobileAccountMenu({
         onClick={() => setOpen((current) => !current)}
       >
         <span className="lb-user-avatar" aria-hidden="true">
-          {email.slice(0, 1).toUpperCase()}
+          {(displayName || email).slice(0, 1).toUpperCase()}
         </span>
         <ChevronDown size={14} aria-hidden="true" />
       </button>
@@ -68,9 +72,19 @@ export function MobileAccountMenu({
           aria-label="Account options"
         >
           <div className="lb-mobile-account-identity">
-            <span>Signed in as</span>
-            <strong>{email}</strong>
+            <span>{displayName ? `Signed in as ${displayName}` : 'Signed in as'}</span>
+            <strong title={email}>{email}</strong>
           </div>
+          <button
+            type="button"
+            className="lb-migration-button lb-mobile-account-action"
+            onClick={() => {
+              setOpen(false);
+              onSettings();
+            }}
+          >
+            Account settings
+          </button>
           <button
             type="button"
             className="lb-migration-button lb-mobile-account-action"

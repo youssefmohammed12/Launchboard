@@ -8,6 +8,7 @@ import type {
   OpportunityResource,
 } from './data/httpOpportunityRepository';
 import { ApiRequestError } from './data/apiClient';
+import * as apiClient from './data/apiClient';
 import { useAuth } from './hooks/useAuth';
 import ApiModeApp from './ApiModeApp';
 
@@ -113,10 +114,20 @@ beforeEach(() => {
   mocks.signOut.mockReset();
   mocks.refresh.mockReset();
   configureAuth();
+  vi.spyOn(apiClient, 'getAccountProfile').mockResolvedValue({
+    profile: {
+      id: 'user-1',
+      email: 'person@example.com',
+      displayName: 'Youssef',
+      emailVerified: true,
+      createdAt: '2026-10-01T10:00:00.000Z',
+    },
+  });
 });
 
 afterEach(() => {
   localStorage.clear();
+  vi.restoreAllMocks();
 });
 
 describe('ApiModeApp', () => {
@@ -127,10 +138,22 @@ describe('ApiModeApp', () => {
 
     expect(await screen.findByText('Server role')).toBeInTheDocument();
     expect(screen.getByText('Your workspace is up to date')).toBeInTheDocument();
-    expect(screen.getByText(/opportunities tracked · revision 7/)).toBeInTheDocument();
+    expect(screen.getByText('1 opportunities tracked')).toBeInTheDocument();
+    expect(screen.queryByText(/revision \d+/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add opportunity' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeInTheDocument();
     expect(mocks.load).toHaveBeenCalledWith('all');
+  });
+
+  it('opens Settings from the account header without requiring a loaded opportunities collection', async () => {
+    mocks.load.mockRejectedValue(new Error('collection unavailable'));
+
+    render(<ApiModeApp />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+
+    expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+    expect(await screen.findByLabelText('Display name')).toHaveValue('Youssef');
   });
 
   it('offers authentication when there is no active session', () => {
@@ -232,6 +255,7 @@ describe('ApiModeApp', () => {
     fireEvent.change(screen.getByLabelText(/Company or client/), {
       target: { value: 'Northwind' },
     });
+    fireEvent.change(screen.getByLabelText('Type *'), { target: { value: 'Internship' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await screen.findByText('Server role');
@@ -271,6 +295,7 @@ describe('ApiModeApp', () => {
     fireEvent.change(screen.getByLabelText(/Company or client/), {
       target: { value: 'Northwind Labs' },
     });
+    fireEvent.change(screen.getByLabelText('Type *'), { target: { value: 'Internship' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save opportunity' }));
 
     await screen.findByText('Server role');

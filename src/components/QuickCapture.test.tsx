@@ -174,7 +174,7 @@ describe('QuickCapture', () => {
   });
 
   it.each([
-    ['unsupported', 'We could not find opportunity information'],
+    ['unsupported', "We couldn't find job details on this page"],
     ['blocked', 'The job site declined the automatic request'],
     ['not-found', 'This job posting is no longer available'],
     ['timeout', 'The job site took too long to respond'],
@@ -216,6 +216,10 @@ describe('QuickCapture', () => {
       expect(screen.getByLabelText('Opportunity URL')).toHaveValue(url);
       expect(screen.getByLabelText(/Title/)).toHaveValue('');
       expect(screen.getByLabelText(/Company or client/)).toHaveValue('');
+      expect(screen.getByLabelText('Type *')).toHaveValue('');
+      expect(screen.getByLabelText(/Job locations/)).toHaveValue('');
+      expect(screen.getByLabelText(/Employer employment type/)).toHaveValue('');
+      expect(screen.queryByText(/confidence/)).not.toBeInTheDocument();
       expect(onSave).not.toHaveBeenCalled();
     },
   );
@@ -234,6 +238,7 @@ describe('QuickCapture', () => {
 
     fireEvent.change(screen.getByLabelText(/Title/), { target: { value: 'Edited title' } });
     fireEvent.change(screen.getByLabelText(/Company or client/), { target: { value: 'Edited employer' } });
+    fireEvent.change(screen.getByLabelText('Type *'), { target: { value: 'Internship' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save opportunity' }));
 
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
@@ -280,6 +285,7 @@ describe('QuickCapture', () => {
     fireEvent.change(screen.getByLabelText(/Company or client/), {
       target: { value: 'Northwind Labs' },
     });
+    fireEvent.change(screen.getByLabelText('Type *'), { target: { value: 'Internship' } });
 
     expect(screen.getByRole('status')).toHaveTextContent(
       'Same opportunity URL and title/company',

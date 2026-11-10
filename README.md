@@ -32,7 +32,7 @@
 
 - **See the big picture:** a dashboard with active opportunity summaries, upcoming activity, and recent records.
 - **Manage opportunities:** create, edit, search, filter, sort, and switch between list and board views.
-- **Keep applications organized:** track status, priority, deadlines, follow-up dates, compensation, tags, and notes.
+- **Keep applications organized:** track status, priority (including Contract opportunities), deadlines, follow-up dates, compensation, tags, and notes.
 - **Manage the full workspace:** attach interviews, contacts, application materials, and activity history to each opportunity.
 - **Capture faster:** use Quick Capture to review suggested details from supported public employer/ATS pages, inspect field evidence, and continue manually when a page is unsupported. LinkedIn links stay manual.
 - **Plan your next actions:** manage opportunity-linked tasks in the Action Center with priorities, optional due dates, completion, and clear overdue/upcoming groups.
@@ -41,6 +41,8 @@
 - **Find anything quickly:** use global search with `Ctrl + K` (or `Cmd + K` on macOS).
 - **Work safely with your data:** archive and restore records, use bulk actions with Undo, import CSV files, and create or restore full JSON backups.
 - **Choose where data lives:** use the browser-only local workspace or opt into the authenticated API workspace.
+- **Manage your account:** in signed-in mode, update your display name, change your password, or delete your account with password and confirmation safeguards.
+- **Recognise account emails:** verification, password-reset and password-change messages use consistent Launchboard-branded HTML and plain-text layouts.
 
 ## Screens and workflows
 
@@ -52,6 +54,7 @@
 | Calendar | Deadlines, follow-ups, interviews, and a distinct filter for dated open tasks |
 | Deadlines | Focused view of upcoming and overdue deadlines |
 | Reports | Pipeline metrics, CSV export, and CSV/JSON import |
+| Account Settings | Signed-in profile display name, password change, and account deletion controls |
 
 Each opportunity can contain its own interview rounds, contacts, materials, and activity history. The Calendar is derived from these records; it is not a separate calendar store.
 
@@ -63,7 +66,7 @@ Each opportunity can contain its own interview rounds, contacts, materials, and 
 
 **Shared domain:** a small TypeScript workspace package containing shared types, controlled values, validation rules, date helpers, limits, and backup normalization.
 
-**Authentication and security:** Argon2id password hashing, database-backed HttpOnly sessions, CSRF protection, exact-origin checks, rate limits, email verification, and password recovery.
+**Authentication and security:** Argon2id password hashing, database-backed HttpOnly sessions, CSRF protection, exact-origin checks, rate limits, email verification, password recovery, and protected account self-service controls. Account emails include responsive branded HTML and plain-text versions.
 
 **Database:** MySQL-compatible storage. Local development supports MariaDB/MySQL; the hosted application uses TiDB Cloud Serverless.
 
@@ -80,6 +83,8 @@ Export a JSON backup regularly. JSON is the full-fidelity backup format and pres
 ### Authenticated API workspace (opt-in)
 
 Set `VITE_DATA_MODE=api` when building or starting the frontend to use the Express API. This mode requires a configured backend, database, authentication settings, and email delivery settings. User data is scoped to the authenticated account and stored by the server.
+
+Signed-in users can open Account Settings to manage an optional display name, change their password, and permanently delete their account after password and confirmation checks. Sign-in email changes are not available. Browser-only local mode remains independent and does not require an account.
 
 The modes do not synchronize automatically. Moving local records to an account is an explicit migration with a preview and a backup safeguard; it does not delete the browser's local data.
 
@@ -206,6 +211,7 @@ npm run test:focus
 - [Shared domain package](packages/domain/README.md) — shared types, rules, module boundaries, and build order.
 - [v1.2.0 release notes](docs/v1.2-release-notes.md) — Action Center features and compatibility.
 - [v1.3.0 release notes](docs/v1.3-release-notes.md) — Quick Capture, structured details and LinkedIn limitations.
+- [v1.3.5 release notes](docs/v1.3.5-release-notes.md) — Account Settings, opportunity workflow improvements, branded account emails, migrations and verification evidence (release candidate; deployment status is tracked here).
 
 ## Deployment
 

@@ -1,4 +1,4 @@
-import type { Opportunity } from '@launchboard/domain';
+import type { Opportunity, OpportunityType } from '@launchboard/domain';
 
 /**
  * The domain types and controlled values live in `@launchboard/domain` so the
@@ -51,7 +51,10 @@ export type {
 
 export type OpportunityFormData = Omit<
   Opportunity,
-  'id' | 'isDemo' | 'archivedAt' | 'activities' | 'interviews' | 'contacts' | 'materials' | 'tasks'
->;
+  'id' | 'isDemo' | 'archivedAt' | 'activities' | 'interviews' | 'contacts' | 'materials' | 'tasks' | 'type'
+> & {
+  /** Empty until the user explicitly chooses an opportunity type. */
+  type: OpportunityType | '';
+};
 export type FormErrors = Partial<Record<keyof OpportunityFormData, string>>;
-export type View = 'dashboard' | 'opportunities' | 'action-center' | 'calendar' | 'deadlines' | 'reports';
+export type View = 'dashboard' | 'opportunities' | 'action-center' | 'calendar' | 'deadlines' | 'reports' | 'settings';

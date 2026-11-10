@@ -12,6 +12,7 @@ import {
 import { findPreAuthSession } from '../auth/sessionRepo.js';
 import { hashPassword } from '../auth/password.js';
 import { withTestServer } from './helpers/server.js';
+import type { AccountActionEmailSender } from '../routes/accountActions.js';
 
 vi.mock('../auth/accountActionRepo.js', () => ({
   consumeAccountActionToken: vi.fn(),
@@ -56,7 +57,7 @@ const connection = {
   release: vi.fn(),
 };
 const pool = { getConnection: vi.fn() } as any;
-const emailSender = vi.fn(async () => undefined);
+const emailSender = vi.fn<AccountActionEmailSender>(async () => undefined);
 
 function app() {
   return createApp({ dbPool: pool, logErrors: false, emailSender });
@@ -167,6 +168,10 @@ describe('email verification and password recovery routes', () => {
       expect(await known.json()).toEqual(await unknown.json());
       expect(known.headers.get('cache-control')).toBe('no-store');
       expect(emailSender).toHaveBeenCalledOnce();
+      expect(emailSender.mock.calls[0]?.[1]).toMatchObject({
+        subject: 'Reset your Launchboard password',
+        html: expect.stringContaining('Reset password'),
+      });
     });
   });
 
@@ -184,7 +189,9 @@ describe('email verification and password recovery routes', () => {
         expect.objectContaining({ appBaseUrl: 'https://launchboard.example' }),
         expect.objectContaining({
           to: user.email,
+          subject: 'Verify your Launchboard email address',
           text: expect.stringContaining('https://launchboard.example/#verifyEmail='),
+          html: expect.stringContaining('Verify email address'),
         }),
       );
     });
@@ -225,6 +232,13 @@ describe('email verification and password recovery routes', () => {
       );
       expect(connection.commit).toHaveBeenCalledOnce();
       expect(response.headers.get('set-cookie')).toBeNull();
+      expect(emailSender).toHaveBeenCalledWith(
+        expect.objectContaining({ appBaseUrl: 'https://launchboard.example' }),
+        expect.objectContaining({
+          subject: 'Your Launchboard password was reset',
+          html: expect.stringContaining('all existing sign-in sessions were signed out'),
+        }),
+      );
     });
   });
 

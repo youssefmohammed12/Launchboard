@@ -5,6 +5,14 @@ export interface AuthUser {
   email: string;
 }
 
+export interface AccountProfile {
+  id: string;
+  email: string;
+  displayName: string;
+  emailVerified: boolean;
+  createdAt: string | Date;
+}
+
 export type CsrfContext = 'pre-auth' | 'authenticated';
 
 interface CsrfResponse {
@@ -164,7 +172,7 @@ async function ensureCsrf(context: CsrfContext): Promise<string> {
 }
 
 export interface JsonRequestOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   headers?: HeadersInit;
   /** Send JSON content type for bodyless mutations that still require it. */
@@ -255,6 +263,40 @@ export async function getCurrentUser(): Promise<AuthResponse> {
   const result = await apiJson<AuthResponse>('/auth/me');
   csrf = { csrfToken: result.csrfToken, context: 'authenticated' };
   return result;
+}
+
+export async function getAccountProfile(): Promise<{ profile: AccountProfile }> {
+  return apiJson<{ profile: AccountProfile }>('/account/profile');
+}
+
+export async function updateAccountProfile(
+  displayName: string,
+): Promise<{ profile: Pick<AccountProfile, 'displayName'> }> {
+  return apiJson<{ profile: Pick<AccountProfile, 'displayName'> }>('/account/profile', {
+    method: 'PATCH',
+    body: { displayName },
+    csrfContext: 'authenticated',
+  });
+}
+
+export async function changeAccountPassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<AccountActionResponse> {
+  return apiJson<AccountActionResponse>('/account/password', {
+    method: 'POST',
+    body: { currentPassword, newPassword },
+    csrfContext: 'authenticated',
+  });
+}
+
+export async function deleteAccount(currentPassword: string): Promise<void> {
+  await apiJson<void>('/account', {
+    method: 'DELETE',
+    body: { currentPassword, confirmation: 'DELETE' },
+    csrfContext: 'authenticated',
+  });
+  clearCsrf('authenticated');
 }
 
 export async function login(email: string, password: string): Promise<AuthResponse> {

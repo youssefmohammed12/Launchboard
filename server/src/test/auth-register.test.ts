@@ -164,7 +164,8 @@ describe('POST /api/auth/register', () => {
       });
       expect(emailSender.mock.calls[0]?.[1]).toMatchObject({
         to: 'user@example.test',
-        subject: 'Verify your Launchboard email',
+        subject: 'Verify your Launchboard email address',
+        html: expect.stringContaining('Verify email address'),
       });
       const verificationLines =
         emailSender.mock.calls[0]?.[1]?.text.split(/\r?\n/) ?? [];

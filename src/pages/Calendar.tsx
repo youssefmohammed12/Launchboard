@@ -145,10 +145,10 @@ function InterviewStatusBadge({ status }: { status: InterviewStatus }) {
 }
 
 function cellEventLabel(event: CalendarEvent): string {
-  if (event.type === 'deadline') return 'Deadline';
-  if (event.type === 'follow-up') return 'Follow-up';
-  if (event.type === 'task') return 'Task';
-  return event.label;
+  if (event.type === 'deadline') return 'Deadline · ' + event.opportunityTitle;
+  if (event.type === 'follow-up') return 'Follow-up · ' + event.opportunityTitle;
+  if (event.type === 'task') return event.taskTitle + ' · ' + event.opportunityTitle;
+  return event.label + ' · ' + event.opportunityTitle;
 }
 
 function eventCountSummary(events: CalendarEvent[]): string {

@@ -662,7 +662,8 @@ dialog[aria-labelledby="modal-title"] {
     flex-wrap: nowrap;
   }
   .lb-sync-state, .lb-user-copy { display: none; }
-  .lb-topbar-actions > .lb-migration-button,
+  .lb-topbar-actions > .lb-migration-button:not(.lb-settings-button),
+  .lb-topbar-actions > .lb-settings-button,
   .lb-topbar-actions > .lb-user-block,
   .lb-topbar-actions > .lb-signout-button { display: none; }
   .lb-mobile-account-menu { display: block; }
@@ -1029,6 +1030,31 @@ dialog[aria-labelledby="modal-title"] {
 
 /* Tablet opportunity lists become labelled cards instead of compressing seven columns. */
 @media (max-width: 860px) and (min-width: 641px) {
+  .lb-content [aria-label="Summary"],
+  .lb-local-content [aria-label="Summary"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .lb-board-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lb-opportunity-search {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .lb-opportunity-filters > select {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
+  }
+
+  .lb-opportunity-list-table td[data-label="Actions"] button,
+  .lb-board-columns button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
   .lb-opportunity-list-wrapper {
     overflow: visible;
     border: 0;

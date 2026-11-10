@@ -118,6 +118,8 @@ describe('Calendar page', () => {
     ];
     renderCalendar(items);
 
+    expect(screen.getByText('Deadline · Deadline Role')).toBeInTheDocument();
+
     const agenda = sectionByHeading('Selected day');
     expect(within(agenda).getAllByRole('button')).toHaveLength(3);
 
@@ -136,6 +138,9 @@ describe('Calendar page', () => {
     expect(
       screen.getByRole('button', { name: /January 15, 2026/ }),
     ).toHaveAccessibleName(/1 interview: Technical Round: Scheduled interview/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Follow-ups' }));
+    expect(screen.getByText('Follow-up · Follow-up Role')).toBeInTheDocument();
   });
 
   it('separates overdue and upcoming events and excludes historical interviews from Upcoming', () => {

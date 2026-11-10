@@ -670,6 +670,7 @@ describe('App ordinary mutation persistence', () => {
     fireEvent.change(screen.getByLabelText(/Company or client/), {
       target: { value: 'Acme' },
     });
+    fireEvent.change(screen.getByLabelText(/Type/), { target: { value: 'Internship' } });
 
     const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('Quota exceeded');

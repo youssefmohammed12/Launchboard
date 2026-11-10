@@ -1,6 +1,6 @@
 # Launchboard authentication design
 
-**Current status — 3 November 2026:** the authentication, email-verification, and password-recovery flows are implemented. The API-mode UI includes sign-in, registration, verification, resend-verification, forgot-password, and reset-password states. The localStorage workspace remains the default and does not require an account.
+**Current status — 10 November 2026:** authentication, email verification, password recovery and Account Settings are implemented locally for the v1.3.5 candidate. The API-mode UI includes sign-in, registration, verification, resend-verification, forgot-password, reset-password and account self-service states. Account Settings supports display-name updates, password changes and confirmed account deletion. The localStorage workspace remains the default and does not require an account.
 
 This document records the implemented security model. The earlier Stage 11 notes below were written before email verification and password recovery were added; the current Stage 12 behavior in this document supersedes those earlier deferred-policy statements.
 
@@ -39,9 +39,24 @@ This document records the implemented security model. The earlier Stage 11 notes
 - Password recovery does not automatically sign the user in.
 - Email links carry tokens in the URL fragment. The frontend removes the fragment from browser history before the user submits the action.
 
+## Account Settings
+
+Account Settings is available only in signed-in API mode. Its API routes live in `server/src/routes/accountSettings.ts`.
+
+- **Profile:** `GET /api/account/profile` returns the signed-in user's display name, sign-in email, email-verification state and account creation date. `PATCH /api/account/profile` updates only the display name (trimmed, maximum 80 characters). The sign-in email remains read-only; changing it requires a separate new-address verification flow.
+- **Password change:** `POST /api/account/password` requires the current password and a new password satisfying the existing 15-character policy. The server rechecks the active session and user row inside a transaction, conditionally updates the password hash, revokes all other active sessions, and retains the current browser session.
+- **Account deletion:** `DELETE /api/account` requires the current password and the literal confirmation `DELETE`. The transaction removes interview rows first because interviews can RESTRICT deletion of referenced contacts, then deletes the user so existing user/session/opportunity cascades remove the account-owned data. The current session cookie is cleared on success.
+- Every mutation requires an authenticated session, exact trusted Origin, JSON content type, authenticated CSRF token and strict schema validation. Profile, password and deletion mutations have separate IP rate limiters. Responses use `Cache-Control: no-store`.
+- Account Settings sends a best-effort password-change notification. Email delivery failure does not roll back a successfully committed password update.
+- Password changes from Settings preserve the current browser session and revoke other sessions; password resets continue to revoke all existing sessions.
+
+
+
 ## Email delivery and configuration
 
-The server uses Nodemailer with Gmail SMTP over TLS on port 465. Configure these server-only variables together:
+The server uses Nodemailer with Gmail SMTP over TLS on port 465. The shared templates in `server/src/services/accountEmails.ts` produce branded responsive HTML and plain-text versions for registration verification, verification resend, password-reset requests, password-reset completion notifications and Account Settings password-change notifications. Action buttons include a visible fallback URL; tokens remain in the URL fragment rather than the initial HTTP request. Verification remains 24 hours and password reset remains one hour.
+
+Configure these server-only variables together:
 
 - `SMTP_USER` — dedicated Gmail sender address.
 - `SMTP_PASS` — Google app password.
@@ -51,7 +66,7 @@ Do not expose these settings through `VITE_*`, commit them, or derive account li
 
 ## Database
 
-Migration `002_auth_pre_sessions.sql` adds short-lived pre-authentication sessions. Migration `003_email_verification_password_reset.sql` adds the email-verification timestamp and purpose-bound action-token table. Both are additive migrations.
+Migration `002_auth_pre_sessions.sql` adds short-lived pre-authentication sessions. Migration `003_email_verification_password_reset.sql` adds the email-verification timestamp and purpose-bound action-token table. Migration `006_account_profile.sql` adds `users.display_name VARCHAR(80) NOT NULL DEFAULT ''` for Account Settings. Migration `007_opportunity_contract_type.sql` expands the opportunity type constraint to include Contract. All are forward-only migrations. The hosted Launchboard TiDB database records migrations 001–007. Migration 007 adds Contract to the opportunity type CHECK; it was applied after a fresh pre-migration export and live postflight. The workstation's local XAMPP schema is separate and was not changed by the hosted migrations.
 
 Use the dedicated `launchboard` database only. Runtime and migration credentials are separate; the runtime account must not receive schema-altering privileges. See [server setup](../server/README.md) and [deployment readiness](deployment-readiness.md).
 
@@ -64,4 +79,4 @@ Use the dedicated `launchboard` database only. Runtime and migration credentials
 
 ## Verification record
 
-The implementation was covered by focused frontend and backend tests, TypeScript checks, local migration verification, and a local synthetic registration/verification/login/reset lifecycle using a fake mail sender. Production rollout and manual email-delivery checks are tracked separately in the deployment record; do not interpret unit tests as proof of production email deliverability.
+The authentication/account implementation is covered by focused frontend and backend tests, TypeScript checks, route integration tests and migration verification. The 10 November 2026 email-template and Contract-type integration finished with 633/633 server tests passing across 39 files, plus a strict server TypeScript check and production build. The HTML template tests use a fake sender; no live test email was sent and no Gmail inbox rendering was visually inspected for the new HTML design. Do not interpret unit tests as proof of production email deliverability. Hosted migration 006 and live schema/grant verification are recorded in `docs/deployment-readiness.md`.

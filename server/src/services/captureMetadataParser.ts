@@ -837,6 +837,58 @@ function pageCompanyFromOpenGraphSiteName(
 }
 
 /**
+ * Page metadata is only a useful fallback when the requested URL looks like
+ * a job route and its title identifies a role rather than a generic jobs page.
+ */
+function hasJobSpecificUrl(requestedUrl: string): boolean {
+  try {
+    const parsed = new URL(requestedUrl);
+    const hostname = parsed.hostname.toLowerCase();
+    const segments = parsed.pathname.toLowerCase().split('/').filter(Boolean);
+    const jobRouteSegments = new Set([
+      'job', 'jobs', 'career', 'careers', 'role', 'roles', 'position', 'positions',
+      'vacancy', 'vacancies', 'opening', 'openings', 'requisition', 'requisitions',
+      'j', 'p',
+    ]);
+
+    return (
+      hostname.startsWith('jobs.') ||
+      hostname.includes('.jobs.') ||
+      hostname.startsWith('careers.') ||
+      hostname.includes('.careers.') ||
+      segments.some((segment) => jobRouteSegments.has(segment))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isGenericPageTitle(title: string): boolean {
+  const normalized = cleanText(title, CAPTURE_FIELD_LIMITS.title)
+    .toLowerCase()
+    .replace(/[|–—:·]+/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+
+  return (
+    !normalized ||
+    normalized === 'example domain' ||
+    normalized === 'document title' ||
+    normalized === 'twitter title' ||
+    normalized === 'careers' ||
+    normalized === 'jobs' ||
+    normalized === 'job openings' ||
+    normalized === 'current openings' ||
+    normalized === 'open positions' ||
+    normalized === 'engineering jobs' ||
+    normalized === 'search results' ||
+    /^careers at\b/u.test(normalized) ||
+    /^jobs at\b/u.test(normalized) ||
+    /^job opportunities\b/u.test(normalized)
+  );
+}
+
+/**
  * Parses one bounded HTML document. It never selects the first job arbitrarily
  * from a list page: multiple JobPosting nodes require one exact URL match.
  */
@@ -994,6 +1046,26 @@ export function parseCaptureMetadata(
       description,
       structuredFields,
       fieldEvidence: evidence,
+    });
+  }
+
+  // Generic page metadata (for example, a product landing page title or
+  // Open Graph description) is not evidence of an opportunity. Only retain
+  // provider-specific employer/title patterns or an explicit job-description
+  // region when no Schema.org JobPosting was found.
+  const hasJobSpecificFallback = Boolean(
+    fallbackCompany ||
+    metadata.jobBoardDescription ||
+    personioTitleParts(metadata.openGraphTitle)?.title ||
+    (hasJobSpecificUrl(requestedUrl) && !isGenericPageTitle(fallbackTitle)),
+  );
+  if (!hasJobSpecificFallback) {
+    return captureMetadataResult({
+      outcome: 'unsupported',
+      source: 'none',
+      title: '',
+      company: '',
+      description: '',
     });
   }
 

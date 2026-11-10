@@ -176,6 +176,18 @@ describe('migration loading', () => {
     expect(prior).toHaveLength(4);
   });
 
+  it('loads the additive account profile migration with a backward-compatible default', async () => {
+    const migrations = await loadMigrations(DEFAULT_MIGRATIONS_DIRECTORY);
+    const migration = migrations.find((entry) => entry.version === '006_account_profile');
+    expect(migration).toBeDefined();
+    expect(migration?.fileName).toBe('006_account_profile.sql');
+
+    const statements = splitSqlStatements(migration?.sql ?? '');
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toContain('ALTER TABLE users');
+    expect(statements[0]).toContain("ADD COLUMN display_name VARCHAR(80) NOT NULL DEFAULT ''");
+  });
+
   it('rejects unsupported filenames, duplicate numbers and an empty directory', async () => {
     await withMigrations({ 'initial.sql': 'SELECT 1;' }, async (directory) => {
       await expect(loadMigrations(directory)).rejects.toMatchObject({
@@ -466,7 +478,7 @@ describe('initial schema and bootstrap invariants', () => {
   });
 });
 
-describe('opportunity migrations 004-005', () => {
+describe('database migrations 004-007', () => {
   const migration004Path = fileURLToPath(
     new URL('../../database/migrations/004_opportunity_tasks.sql', import.meta.url),
   );
@@ -474,7 +486,7 @@ describe('opportunity migrations 004-005', () => {
     new URL('../../database/migrations/005_opportunity_job_details.sql', import.meta.url),
   );
 
-  it('discovers additive migration 005 after the existing migrations without connecting to a database', async () => {
+  it('discovers additive migrations 005 and 006 after the existing migrations without connecting to a database', async () => {
     const migrations = await loadMigrations(DEFAULT_MIGRATIONS_DIRECTORY);
     expect(migrations.map((migration) => migration.version)).toEqual([
       '001_initial_schema',
@@ -482,9 +494,30 @@ describe('opportunity migrations 004-005', () => {
       '003_email_verification_password_reset',
       '004_opportunity_tasks',
       '005_opportunity_job_details',
+      '006_account_profile',
+      '007_opportunity_contract_type',
     ]);
     expect(migrations[3]?.sql).toContain('CREATE TABLE tasks');
     expect(migrations[4]?.sql).toContain('CREATE TABLE opportunity_locations');
+    expect(migrations[5]?.sql).toContain('ADD COLUMN display_name VARCHAR(80) NOT NULL DEFAULT');
+    expect(migrations[6]?.sql).toContain('DROP CONSTRAINT chk_opportunities_type');
+    expect(migrations[6]?.sql).toContain("'Contract'");
+  });
+
+  it('extends the opportunity type constraint to include Contract without changing existing rows', () => {
+    const migrations = loadMigrations(DEFAULT_MIGRATIONS_DIRECTORY);
+    return migrations.then((entries) => {
+      const migration = entries.find((entry) => entry.version === '007_opportunity_contract_type');
+      expect(migration?.fileName).toBe('007_opportunity_contract_type.sql');
+      const statements = splitSqlStatements(migration?.sql ?? '');
+      expect(statements).toHaveLength(2);
+      expect(statements[0]).toContain('ALTER TABLE opportunities');
+      expect(statements[0]).toContain('DROP CONSTRAINT chk_opportunities_type');
+      expect(statements[1]).toContain('ALTER TABLE opportunities');
+      expect(statements[1]).toContain('ADD CONSTRAINT chk_opportunities_type');
+      expect(statements[1]).toContain("'Contract'");
+      expect(statements.every((statement) => !/DROP TABLE|DELETE FROM|TRUNCATE/i.test(statement))).toBe(true);
+    });
   });
 
   it('adds optional structured fields and an ordered location table without destructive SQL', () => {

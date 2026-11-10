@@ -115,9 +115,10 @@ describe('live migration report', () => {
     expect(latestRecordedMigration([
       { version: '001_initial_schema', checksum: 'first' },
       { version: '004_opportunity_tasks', checksum: 'middle' },
-      { version: '005_opportunity_job_details', checksum: 'latest' },
+      { version: '005_opportunity_job_details', checksum: 'previous' },
+      { version: '006_account_profile', checksum: 'latest' },
     ])).toEqual({
-      version: '005_opportunity_job_details',
+      version: '006_account_profile',
       checksum: 'latest',
     });
     expect(latestRecordedMigration([])).toBeNull();
@@ -130,6 +131,26 @@ describe('live schema evaluation', () => {
     expect(failures).toContain('missing table users');
     expect(failures).toContain('missing table auth_pre_sessions');
     expect(failures).toContain('missing table schema_migrations');
+  });
+
+  it('requires the migrated user display-name column', () => {
+    const missing = evaluateSchema(snapshot());
+    expect(missing).toContain('missing column users.display_name');
+
+    const present = evaluateSchema(snapshot({
+      columns: [{
+        table: 'users',
+        name: 'display_name',
+        dataType: 'varchar',
+        collation: 'utf8mb4_unicode_ci',
+        nullable: false,
+        extra: '',
+        charLength: 80,
+        precision: null,
+        unsigned: false,
+      }],
+    }));
+    expect(present).not.toContain('missing column users.display_name');
   });
 
   it('reports a table that is not InnoDB', () => {

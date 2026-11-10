@@ -7,6 +7,8 @@ import {
   computeStats,
   emptyForm,
   followUpItems,
+  normalizeWorkplaceDetails,
+  stripUtmParameters,
   MAX_TAGS,
   MAX_TAG_LENGTH,
   normalizeStoredTags,
@@ -282,6 +284,7 @@ describe('validate', () => {
     expect(validate(emptyForm)).toEqual({
       title: 'Title is required.',
       company: 'Company or client is required.',
+      type: 'Choose an opportunity type.',
     });
 
     expect(
@@ -289,6 +292,7 @@ describe('validate', () => {
         ...emptyForm,
         title: 'Frontend Intern',
         company: 'Northwind Labs',
+        type: 'Internship',
         url: 'https://example.com/jobs/1',
         followUpDate: '2026-01-20',
       }),
@@ -316,10 +320,30 @@ describe('validate', () => {
         ...emptyForm,
         title: 'Frontend Intern',
         company: 'Northwind Labs',
+        type: 'Internship',
         deadline: '2028-02-29',
         followUpDate: '2028-03-01',
       }),
     ).toEqual({});
+  });
+});
+
+describe('opportunity field normalization', () => {
+  it('removes UTM campaign parameters without dropping meaningful query values', () => {
+    expect(stripUtmParameters('https://example.test/jobs/123?ref=share&utm_source=chatgpt.com&job=123&utm_campaign=review'))
+      .toBe('https://example.test/jobs/123?ref=share&job=123');
+  });
+
+  it('keeps workplace modes out of locations and employer employment type', () => {
+    expect(normalizeWorkplaceDetails({
+      locations: ['Cairo, Egypt', 'Remote', 'Remote (Egypt)'],
+      workplaceType: '',
+      employmentType: 'Remote, Full-time',
+    })).toEqual({
+      locations: ['Cairo, Egypt', 'Egypt'],
+      workplaceType: 'Remote',
+      employmentType: 'Full-time',
+    });
   });
 });
 

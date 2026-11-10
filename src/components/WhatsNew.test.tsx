@@ -13,8 +13,12 @@ describe('What’s New', () => {
     );
 
     expect(screen.getByRole('dialog', { name: "What's New" })).toBeInTheDocument();
+    expect(screen.getByText('Version 1.3.5 · Latest')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Manage your Launchboard account' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Capture opportunities from a link' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Keep every next step moving' })).toBeInTheDocument();
+    expect(screen.getByText(/Your current browser stays signed in while other active sessions are signed out/)).toBeInTheDocument();
+    expect(screen.getByText(/responsive HTML and plain-text versions/)).toBeInTheDocument();
     expect(screen.getByText(/Nothing is saved until you review and confirm it/)).toBeInTheDocument();
   });
 

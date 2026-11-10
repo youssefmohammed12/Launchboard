@@ -5,10 +5,12 @@ import type {
   OpportunityStatus,
   OpportunityType,
   Priority,
+  WorkplaceType,
 } from '../types/opportunity';
 import {
   MAX_TAG_LENGTH,
   MAX_TAGS,
+  WORKPLACE_TYPES,
   isValidUrl,
   normalizeTagList,
 } from '@launchboard/domain';
@@ -16,6 +18,76 @@ import { activeOpportunities, isArchived } from './archive';
 import { daysUntil, isValidISODate } from './dates';
 
 export { MAX_TAG_LENGTH, MAX_TAGS, isValidUrl, normalizeTagList } from '@launchboard/domain';
+
+/** Removes only UTM campaign parameters while retaining meaningful query data. */
+export function stripUtmParameters(value: string): string {
+  const input = value.trim();
+  if (!input) return '';
+
+  try {
+    const url = new URL(input);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return input;
+    for (const name of [...url.searchParams.keys()]) {
+      if (name.toLowerCase().startsWith('utm_')) url.searchParams.delete(name);
+    }
+    return url.toString();
+  } catch {
+    // Validation reports malformed URLs separately; never destroy the user's input.
+    return input;
+  }
+}
+
+export interface NormalizedWorkplaceDetails {
+  locations: string[];
+  workplaceType: WorkplaceType | '';
+  employmentType: string;
+}
+
+function workplaceMode(value: string): WorkplaceType | '' {
+  const normalized = value.trim().toLowerCase().replace(/[\s_-]+/gu, '');
+  return WORKPLACE_TYPES.find((mode) =>
+    mode.toLowerCase().replace(/[\s_-]+/gu, '') === normalized
+  ) ?? '';
+}
+
+/**
+ * Keeps workplace mode separate from employer contract type and physical
+ * locations. This is an edit/save-time cleanup; stored records are not rewritten
+ * merely by reading them.
+ */
+export function normalizeWorkplaceDetails(
+  input: Pick<OpportunityFormData, 'locations' | 'workplaceType' | 'employmentType'>,
+): NormalizedWorkplaceDetails {
+  const employmentParts = input.employmentType
+    .split(/[,;|]/u)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const employmentMode = employmentParts
+    .map(workplaceMode)
+    .find(Boolean) ?? '';
+
+  const locations: string[] = [];
+  let locationMode: WorkplaceType | '' = '';
+  for (const raw of input.locations) {
+    const value = raw.trim().replace(/\s+/gu, ' ');
+    if (!value) continue;
+    const modeAndPlace = /^(Remote|Hybrid|On[\s-]?site)(?:\s*(?:\(([^)]+)\)|[-,|:]\s*(.+)))?$/iu.exec(value);
+    const mode = workplaceMode(modeAndPlace?.[1] ?? value);
+    if (mode) {
+      locationMode ||= mode;
+      const place = (modeAndPlace?.[2] ?? modeAndPlace?.[3] ?? '').trim();
+      if (place) locations.push(place);
+      continue;
+    }
+    locations.push(value);
+  }
+
+  return {
+    locations: [...new Set(locations)],
+    workplaceType: input.workplaceType || employmentMode || locationMode,
+    employmentType: employmentParts.filter((part) => !workplaceMode(part)).join(', '),
+  };
+}
 
 
 export interface Stats {
@@ -199,7 +271,7 @@ export function followUpItems(items: Opportunity[]): Opportunity[] {
 export const emptyForm: OpportunityFormData = {
   title: '',
   company: '',
-  type: 'Internship',
+  type: '',
   status: 'Saved',
   priority: 'Medium',
   tags: [],
@@ -222,6 +294,7 @@ export function validate(data: OpportunityFormData): FormErrors {
   const errors: FormErrors = {};
   if (!data.title.trim()) errors.title = 'Title is required.';
   if (!data.company.trim()) errors.company = 'Company or client is required.';
+  if (!data.type) errors.type = 'Choose an opportunity type.';
   if (data.url.trim() && !isValidUrl(data.url.trim())) {
     errors.url = 'Enter a valid URL starting with http:// or https://.';
   }

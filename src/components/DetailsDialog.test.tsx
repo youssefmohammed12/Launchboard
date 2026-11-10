@@ -6,11 +6,12 @@ import { DetailsDialog } from './DetailsDialog';
 describe('DetailsDialog structured job details', () => {
   it('shows the job facts and numeric salary beside the original compensation wording', () => {
     const item = makeOpportunity({
-      locations: ['Cairo, Egypt', 'Berlin, Germany'],
+      type: 'Full-time',
+      locations: ['Cairo, Egypt', 'Remote', 'Remote (Egypt)'],
       department: 'Engineering',
       team: 'Platform',
-      workplaceType: 'Hybrid',
-      employmentType: 'Full-time',
+      workplaceType: '',
+      employmentType: 'Remote, Full-time',
       postedDate: '2026-11-05',
       compensation: 'EGP 15,000–20,000 monthly',
       compensationDetails: {
@@ -44,11 +45,16 @@ describe('DetailsDialog structured job details', () => {
       />,
     );
 
-    expect(screen.getByText('Cairo, Egypt · Berlin, Germany')).toBeInTheDocument();
+    expect(screen.getByText('Cairo, Egypt · Egypt')).toBeInTheDocument();
     expect(screen.getByText('Engineering')).toBeInTheDocument();
     expect(screen.getByText('Platform')).toBeInTheDocument();
-    expect(screen.getByText('Hybrid')).toBeInTheDocument();
+    expect(screen.getByText('Employment type')).toBeInTheDocument();
+    expect(screen.getByText('Work mode')).toBeInTheDocument();
+    expect(screen.getByText('Remote')).toBeInTheDocument();
     expect(screen.getByText('Full-time')).toBeInTheDocument();
+    expect(screen.queryByText('Opportunity type')).not.toBeInTheDocument();
+    expect(screen.queryByText('Employer employment type')).not.toBeInTheDocument();
+    expect(screen.queryByText('Remote, Full-time')).not.toBeInTheDocument();
     expect(screen.getByText('Nov 5, 2026')).toBeInTheDocument();
     expect(screen.getByText('EGP 15,000–20,000 monthly')).toBeInTheDocument();
     expect(screen.getByText('15,000–20,000 EGP /month')).toBeInTheDocument();

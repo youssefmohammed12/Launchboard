@@ -8,6 +8,7 @@ import { parseAuthEnv, parseEmailEnv } from "../config/env.js";
 import type { EmailServiceConfig } from "../config/env.js";
 import { createAccountActionToken } from "../auth/accountActionRepo.js";
 import { sendEmail, type EmailMessage } from "../services/emailService.js";
+import { createVerificationEmail } from "../services/accountEmails.js";
 import { createAuthRateLimiters } from "../middleware/authRateLimiters.js";
 import {
   consumePreAuthSession,
@@ -188,25 +189,11 @@ export function createAuthRouter(
       await connection.commit();
       transactionStarted = false;
 
-      const verificationUrl = new URL("/", emailConfig.appBaseUrl);
-      // Keep the one-time token in the fragment, which browsers do not send
-      // with the initial HTTP request to Vercel.
-      verificationUrl.hash = new URLSearchParams([
-        ["verifyEmail", verification.token],
-      ]).toString();
       try {
-        await emailSender(emailConfig, {
-          to: parsed.data.email,
-          subject: "Verify your Launchboard email",
-          text: [
-            "Verify your email address to activate your Launchboard account.",
-            "",
-            verificationUrl.toString(),
-            "",
-            "This link expires in 24 hours and can only be used once.",
-            "If you did not request this account, you can ignore this email.",
-          ].join("\n"),
-        });
+        await emailSender(
+          emailConfig,
+          createVerificationEmail(emailConfig, parsed.data.email, verification.token),
+        );
       } catch {
         // Keep registration's public response generic. The user can request a
         // fresh verification link through the resend endpoint.

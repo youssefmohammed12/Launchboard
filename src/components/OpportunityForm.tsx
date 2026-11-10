@@ -12,7 +12,13 @@ import {
   type Opportunity,
   type OpportunityFormData,
 } from '../types/opportunity';
-import { emptyForm, parseTagInput, validate } from '../utils/opportunities';
+import {
+  emptyForm,
+  normalizeWorkplaceDetails,
+  parseTagInput,
+  stripUtmParameters,
+  validate,
+} from '../utils/opportunities';
 import {
   SAVE_FAILURE_MESSAGE,
   type MutationOutcome,
@@ -93,15 +99,13 @@ export function OpportunityForm({
   onSave,
   onCancel,
 }: Props) {
-  const [data, setData] = useState<OpportunityFormData>(() => (
-    initial ? toFormData(initial) : { ...emptyForm, ...initialData }
-  ));
-  const [tagInput, setTagInput] = useState(() => (
-    initial ? initial.tags.join(', ') : (initialData?.tags ?? emptyForm.tags).join(', ')
-  ));
-  const [locationInput, setLocationInput] = useState(() => (
-    initial ? initial.locations.join('\n') : (initialData?.locations ?? emptyForm.locations).join('\n')
-  ));
+  const [initialFormData] = useState<OpportunityFormData>(() => {
+    const formData = initial ? toFormData(initial) : { ...emptyForm, ...initialData };
+    return { ...formData, ...normalizeWorkplaceDetails(formData) };
+  });
+  const [data, setData] = useState<OpportunityFormData>(initialFormData);
+  const [tagInput, setTagInput] = useState(() => initialFormData.tags.join(', '));
+  const [locationInput, setLocationInput] = useState(() => initialFormData.locations.join('\n'));
   const [errors, setErrors] = useState<FormErrors>({});
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -169,7 +173,12 @@ export function OpportunityForm({
     const parsedTags = parseTagInput(tagInput);
     if (parsedTags.error) found.tags = parsedTags.error;
     setErrors(found);
-    if (Object.keys(found).length > 0) return;
+    if (Object.keys(found).length > 0 || !data.type) return;
+    const normalizedJobDetails = normalizeWorkplaceDetails({
+      locations: locationInput.split(/\r?\n/u).map((location) => location.trim()).filter(Boolean),
+      workplaceType: data.workplaceType,
+      employmentType: data.employmentType,
+    });
 
     setSaveError(null);
     try {
@@ -177,13 +186,12 @@ export function OpportunityForm({
         ...data,
         title: data.title.trim(),
         company: data.company.trim(),
-        url: data.url.trim(),
+        url: stripUtmParameters(data.url),
         deadline: data.deadline.trim(),
         followUpDate: data.followUpDate.trim(),
-        locations: locationInput.split(/\r?\n/u).map((location) => location.trim()).filter(Boolean),
+        ...normalizedJobDetails,
         department: data.department.trim(),
         team: data.team.trim(),
-        employmentType: data.employmentType.trim(),
         postedDate: data.postedDate.trim(),
         compensationDetails: data.compensationDetails && (data.compensationDetails.minAmount || data.compensationDetails.maxAmount)
           ? data.compensationDetails
@@ -295,14 +303,17 @@ export function OpportunityForm({
             className={controlClass}
             value={data.type}
             onChange={(e) => {
-              const t = OPPORTUNITY_TYPES.find((x) => x === e.target.value);
-              if (t) setData((d) => ({ ...d, type: t }));
+              const t = OPPORTUNITY_TYPES.find((x) => x === e.target.value) ?? '';
+              setData((d) => ({ ...d, type: t }));
             }}
+            {...a11y('type')}
           >
+            <option value="">Select type</option>
             {OPPORTUNITY_TYPES.map((t) => (
-              <option key={t}>{t}</option>
+              <option key={t} value={t}>{t}</option>
             ))}
           </select>
+          {msg('type')}
         </div>
         <div className={fieldClass}>
           <label htmlFor="f-status" className={labelClass}>Status *</label>
@@ -374,7 +385,7 @@ export function OpportunityForm({
         </div>
         <div className={`${fieldClass} col-span-2 max-[640px]:col-span-1`}>
           <label htmlFor="f-locations" className={labelClass}>Job locations</label>
-          <textarea id="f-locations" rows={2} className={controlClass} value={locationInput} onChange={(event) => { setLocationInput(event.target.value); markEvidenceEdited('locations'); }} placeholder="Cairo, Egypt\nRemote (Egypt)" />
+          <textarea id="f-locations" rows={2} className={controlClass} value={locationInput} onChange={(event) => { setLocationInput(event.target.value); markEvidenceEdited('locations'); }} placeholder="Enter one place per line" />
           <span className="text-[0.75rem] text-muted">One location per line; first location is treated as primary.</span>
           {evidenceHint('locations')}
         </div>
@@ -398,7 +409,7 @@ export function OpportunityForm({
         </div>
         <div className={fieldClass}>
           <label htmlFor="f-employment-type" className={labelClass}>Employer employment type</label>
-          <input id="f-employment-type" className={controlClass} value={data.employmentType} onChange={text('employmentType')} placeholder="Full-time, Internship, Contract…" />
+          <input id="f-employment-type" className={controlClass} value={data.employmentType} onChange={text('employmentType')} placeholder="e.g. Full-time" />
           {evidenceHint('employmentType')}
         </div>
         <div className={fieldClass}>

@@ -1,4 +1,4 @@
-export const OPPORTUNITY_TYPES = ['Internship', 'Full-time', 'Part-time', 'Freelance'] as const;
+export const OPPORTUNITY_TYPES = ['Internship', 'Full-time', 'Part-time', 'Freelance', 'Contract'] as const;
 export const OPPORTUNITY_STATUSES = ['Saved', 'Applied', 'Interview', 'Offer', 'Rejected'] as const;
 export const PRIORITIES = ['Low', 'Medium', 'High'] as const;
 export const WORKPLACE_TYPES = ['Remote', 'Hybrid', 'On-site'] as const;

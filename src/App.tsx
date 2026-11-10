@@ -452,6 +452,9 @@ function LocalStorageApp() {
   };
 
   const handleSave = (data: OpportunityFormData): boolean => {
+    const { type, ...formFields } = data;
+    if (!type) return false;
+    const validData = { ...formFields, type };
     let candidate: Opportunity[];
 
     if (dialog.kind === 'form' && dialog.item) {
@@ -468,7 +471,7 @@ function LocalStorageApp() {
       candidate = items.map((o) =>
         o.id === current.id
           ? {
-              ...data,
+              ...validData,
               id: current.id,
               // The core form never owns archive state, so an edit must not
               // silently reactivate an archived opportunity.
@@ -485,7 +488,7 @@ function LocalStorageApp() {
       candidate = [
         ...items,
         {
-          ...data,
+          ...validData,
           id: createId(),
           activities: [],
           interviews: [],

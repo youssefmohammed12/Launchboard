@@ -4,6 +4,7 @@ import type { Express } from 'express';
 import type { ReadinessProbe } from './db/readiness.js';
 import { createAuthRouter, type AuthEmailSender } from './routes/auth.js';
 import { createAccountActionsRouter } from './routes/accountActions.js';
+import { createAccountSettingsRouter } from './routes/accountSettings.js';
 import { createErrorHandler } from './middleware/errorHandler.js';
 import { notFound } from './middleware/notFound.js';
 import { requestId } from './middleware/requestId.js';
@@ -74,6 +75,9 @@ export function createApp(options: AppOptions = {}): Express {
     emailSender: options.emailSender,
   }));
   app.use('/api', createAccountActionsRouter(options.dbPool ?? null, {
+    emailSender: options.emailSender,
+  }));
+  app.use('/api', createAccountSettingsRouter(options.dbPool ?? null, {
     emailSender: options.emailSender,
   }));
   app.use('/api/opportunities', createOpportunityRouter(options.dbPool ?? null));

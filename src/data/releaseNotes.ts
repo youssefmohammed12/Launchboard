@@ -19,6 +19,37 @@ export interface ReleaseNote {
  */
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '1.3.5',
+    date: 'November 10, 2026',
+    title: 'Manage your Launchboard account',
+    summary:
+      'Account Settings brings your profile and sign-in controls together, while clearer branded emails keep important account actions easy to recognise.',
+    accountModeNote:
+      'Account Settings is available in signed-in account mode. Browser-only local workspaces remain independent and do not need an account.',
+    sections: [
+      {
+        heading: 'Added',
+        items: [
+          'Choose or update the display name shown in your Launchboard account. Your sign-in email remains visible and read-only.',
+          'Change your password after confirming your current password. Your current browser stays signed in while other active sessions are signed out.',
+          'Permanently delete your account after re-entering your password and typing DELETE as confirmation. Export a JSON backup first because account data removal cannot be undone.',
+        ],
+      },
+      {
+        heading: 'Improved',
+        items: [
+          'Account verification, verification resend, password reset and password-change emails now share a consistent Launchboard design with responsive HTML and plain-text versions.',
+          'Important account emails include clear action wording, expiry or security notices, and a copy-and-paste link when a button is unavailable.',
+          'Password changes made from Settings send a security notification without cancelling the password change if email delivery is unavailable.',
+          'Opportunity types now include Contract, and new records require an explicit type choice instead of assuming Internship.',
+          'Job details keep employer work mode, physical locations and employment type separate. Saved posting links are cleaned of UTM campaign parameters without discarding meaningful query data.',
+          'Quick Capture is more selective about generic careers/marketing pages and keeps unsupported links ready for manual entry.',
+          'Calendar month events identify their opportunity, and the Dashboard seven-day summary now respects its exact date range.',
+        ],
+      },
+    ],
+  },
+  {
     version: '1.3.0',
     date: 'November 8, 2026',
     title: 'Capture opportunities from a link',

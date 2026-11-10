@@ -56,7 +56,7 @@ function outcomeMessage(result: CapturePreviewResponse): string {
     case 'ambiguous':
       return 'This page may contain multiple opportunities or unclear structured data. Treat these suggestions carefully and verify them.';
     case 'unsupported':
-      return 'We could not find opportunity information on this page. Continue with manual adding; your URL is preserved.';
+      return "We couldn't find job details on this page. Fill them in manually; your URL is preserved.";
     case 'blocked':
       return 'The job site declined the automatic request or requires access. No details were extracted. Continue manually; your URL is preserved.';
     case 'not-found':
@@ -252,7 +252,10 @@ export function QuickCapture({
         )}
 
         {previewState === 'ready' && preview && (
-          <p className="m-0 rounded-control border border-accent bg-accent-soft px-s3 py-s2 text-[0.84rem] text-accent-dark" role="status" aria-live="polite">
+          <p className={hasPreviewDetails
+            ? "m-0 rounded-control border border-accent bg-accent-soft px-s3 py-s2 text-[0.84rem] text-accent-dark"
+            : "m-0 rounded-control border border-border bg-bg px-s3 py-s2 text-[0.84rem] text-muted"
+          } role="status" aria-live="polite">
             {outcomeMessage(preview)}
           </p>
         )}
@@ -276,8 +279,10 @@ export function QuickCapture({
             >
               {previewState === 'loading'
                 ? 'Looking up…'
-                : previewState === 'ready'
+                : previewState === 'ready' && hasPreviewDetails
                   ? 'Find details again'
+                  : previewState === 'ready'
+                    ? 'Try again'
                   : previewState === 'failed'
                     ? 'Try again'
                     : 'Find details'}

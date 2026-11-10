@@ -5,11 +5,14 @@ import { MobileAccountMenu } from './MobileAccountMenu';
 describe('MobileAccountMenu', () => {
   it('shows the signed-in email and keeps account actions available', () => {
     const onMigrate = vi.fn();
+    const onSettings = vi.fn();
     const onSignOut = vi.fn();
     render(
       <MobileAccountMenu
         email="youssef@example.com"
+        displayName="Youssef"
         onMigrate={onMigrate}
+        onSettings={onSettings}
         onSignOut={onSignOut}
       />,
     );
@@ -21,7 +24,13 @@ describe('MobileAccountMenu', () => {
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('region', { name: 'Account options' })).toBeInTheDocument();
     expect(screen.getByText('youssef@example.com')).toBeInTheDocument();
+    expect(screen.getByText('Signed in as Youssef')).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole('button', { name: 'Account settings' }));
+    expect(onSettings).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('region', { name: 'Account options' })).not.toBeInTheDocument();
+
+    fireEvent.click(trigger);
     fireEvent.click(screen.getByRole('button', { name: 'Migrate local data' }));
     expect(onMigrate).toHaveBeenCalledOnce();
     expect(screen.queryByRole('region', { name: 'Account options' })).not.toBeInTheDocument();
@@ -37,6 +46,7 @@ describe('MobileAccountMenu', () => {
       <MobileAccountMenu
         email="youssef@example.com"
         onMigrate={vi.fn()}
+        onSettings={vi.fn()}
         onSignOut={vi.fn()}
       />,
     );
@@ -56,6 +66,7 @@ describe('MobileAccountMenu', () => {
         <MobileAccountMenu
           email="youssef@example.com"
           onMigrate={vi.fn()}
+          onSettings={vi.fn()}
           onSignOut={vi.fn()}
         />
         <button type="button">Outside</button>
@@ -74,6 +85,7 @@ describe('MobileAccountMenu', () => {
         email="youssef@example.com"
         disabled
         onMigrate={vi.fn()}
+        onSettings={vi.fn()}
         onSignOut={vi.fn()}
       />,
     );

@@ -26,32 +26,35 @@ describe('capture metadata parser', () => {
     });
   });
 
-  it('uses Open Graph, Twitter and document title/description fallbacks in order', () => {
+  it('rejects generic Open Graph and document metadata when no job evidence exists', () => {
     const html = '<html><head><title>Document title</title>' +
-      '<meta property="og:title" content="Open Graph title">' +
+      '<meta property="og:title" content="Example Domain">' +
       '<meta name="twitter:title" content="Twitter title">' +
-      '<meta property="og:description" content="Open Graph description">' +
+      '<meta property="og:description" content="This domain is for use in illustrative examples.">' +
       '<meta name="description" content="Meta description">' +
       '</head><body></body></html>';
 
-    expect(parseCaptureMetadata(html, requestedUrl, finalUrl)).toMatchObject({
-      outcome: 'partial',
-      source: 'page-metadata',
-      title: 'Open Graph title',
+    expect(parseCaptureMetadata(html, 'https://example.com/', 'https://example.com/')).toMatchObject({
+      outcome: 'unsupported',
+      source: 'none',
+      title: '',
       company: '',
-      description: 'Open Graph description',
+      description: '',
+      fieldEvidence: {},
     });
   });
 
   it('sanitizes HTML fragments embedded in page-description metadata', () => {
     const html = '<html><head>' +
+      '<title>Job Application for Role title at Example Ltd</title>' +
       '<meta property="og:title" content="Role title">' +
       '<meta property="og:description" content="&lt;div&gt;Build &lt;strong&gt;reliable&lt;/strong&gt; services.&lt;script&gt;ignore()&lt;/script&gt;&lt;/div&gt;">' +
       '</head></html>';
 
     expect(parseCaptureMetadata(html, requestedUrl, finalUrl)).toMatchObject({
-      outcome: 'partial',
+      outcome: 'ready',
       title: 'Role title',
+      company: 'Example Ltd',
       description: 'Build reliable services.',
     });
   });
@@ -418,8 +421,9 @@ describe('capture metadata parser', () => {
       '</body></html>';
 
     expect(parseCaptureMetadata(html, requestedUrl, finalUrl)).toMatchObject({
-      outcome: 'partial',
-      title: 'Engineering jobs',
+      outcome: 'unsupported',
+      source: 'none',
+      title: '',
       company: '',
       description: '',
     });
@@ -431,8 +435,10 @@ describe('capture metadata parser', () => {
       '<div class="description">Generic marketing copy.</div></body></html>';
 
     expect(parseCaptureMetadata(html, requestedUrl, finalUrl)).toMatchObject({
-      outcome: 'partial',
-      title: 'Careers',
+      outcome: 'unsupported',
+      source: 'none',
+      title: '',
+      company: '',
       description: '',
     });
   });
@@ -445,8 +451,9 @@ describe('capture metadata parser', () => {
       '<body>' + regions + '</body></html>';
 
     expect(parseCaptureMetadata(html, requestedUrl, finalUrl)).toMatchObject({
-      outcome: 'partial',
-      title: 'Careers',
+      outcome: 'unsupported',
+      source: 'none',
+      title: '',
       company: '',
       description: '',
     });
@@ -657,10 +664,11 @@ describe('capture metadata parser', () => {
       '</article></body></html>';
 
     expect(parseCaptureMetadata(html, requestedUrl, finalUrl)).toMatchObject({
-      outcome: 'partial',
-      source: 'page-metadata',
-      title: 'Careers at Example',
+      outcome: 'unsupported',
+      source: 'none',
+      title: '',
       company: '',
+      description: '',
     });
   });
 

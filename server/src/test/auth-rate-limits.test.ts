@@ -34,6 +34,9 @@ describe('authentication rate limit policy', () => {
       passwordResetPerIp: { limit: 5, windowMs: 15 * 60 * 1000 },
       passwordResetConfirmPerIp: { limit: 5, windowMs: 15 * 60 * 1000 },
       accountActionPerIdentifier: { limit: 6, windowMs: 60 * 60 * 1000 },
+      accountProfileUpdatePerIp: { limit: 10, windowMs: 15 * 60 * 1000 },
+      accountPasswordChangePerIp: { limit: 5, windowMs: 15 * 60 * 1000 },
+      accountDeletionPerIp: { limit: 3, windowMs: 60 * 60 * 1000 },
     });
   });
 });

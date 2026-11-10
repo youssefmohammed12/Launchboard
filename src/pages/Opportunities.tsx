@@ -347,8 +347,8 @@ export function Opportunities({
         </div>
       </div>
 
-      <div className="mb-s4 flex flex-wrap gap-s2">
-        <div className="relative grow shrink basis-[220px] text-muted">
+      <div className="lb-opportunity-filters mb-s4 flex flex-wrap gap-s2">
+        <div className="lb-opportunity-search relative grow shrink basis-[220px] text-muted">
           <Search size={16} aria-hidden className="absolute left-s3 top-1/2 -translate-y-1/2" />
           <input
             type="search"

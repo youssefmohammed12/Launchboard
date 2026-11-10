@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiRequestError,
   getCurrentUser,
+  getAccountProfile,
+  updateAccountProfile,
+  changeAccountPassword,
+  deleteAccount,
   login,
   logout,
   register,
@@ -286,3 +290,76 @@ describe('same-origin API client', () => {
     )).toBe(true);
     expect(actionCalls.every((call) => call.init.credentials === 'same-origin')).toBe(true);
   });
+
+
+describe('account settings API helpers', () => {
+  it('loads a profile and sends CSRF-protected profile, password and deletion requests', async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = String(input);
+      calls.push({ url, init });
+      if (url === '/api/auth/csrf') {
+        return jsonResponse({ csrfToken: 'account-csrf', context: 'authenticated' });
+      }
+      if (url === '/api/account/profile' && (init.method === undefined || init.method === 'GET')) {
+        return jsonResponse({
+          profile: {
+            id: 'user-1',
+            email: 'person@example.com',
+            displayName: 'Youssef',
+            emailVerified: true,
+            createdAt: '2026-10-01T10:00:00.000Z',
+          },
+        });
+      }
+      if (url === '/api/account/profile' && init.method === 'PATCH') {
+        return jsonResponse({ profile: { displayName: 'Youssef Mohammed' } });
+      }
+      if (url === '/api/account/password') {
+        return jsonResponse({ message: 'Password changed.' });
+      }
+      if (url === '/api/account' && init.method === 'DELETE') {
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const loaded = await getAccountProfile();
+    const updated = await updateAccountProfile('Youssef Mohammed');
+    const password = await changeAccountPassword('current-password', 'a-new-password-that-is-long-enough');
+    await deleteAccount('current-password');
+
+    expect(loaded.profile.email).toBe('person@example.com');
+    expect(updated.profile.displayName).toBe('Youssef Mohammed');
+    expect(password.message).toBe('Password changed.');
+    expect(calls.map((call) => call.url)).toEqual([
+      '/api/account/profile',
+      '/api/auth/csrf',
+      '/api/account/profile',
+      '/api/account/password',
+      '/api/account',
+    ]);
+
+    const profileHeaders = new Headers(calls[2].init.headers);
+    expect(calls[2].init.method).toBe('PATCH');
+    expect(profileHeaders.get('X-CSRF-Token')).toBe('account-csrf');
+    expect(JSON.parse(String(calls[2].init.body))).toEqual({ displayName: 'Youssef Mohammed' });
+
+    const passwordHeaders = new Headers(calls[3].init.headers);
+    expect(passwordHeaders.get('X-CSRF-Token')).toBe('account-csrf');
+    expect(JSON.parse(String(calls[3].init.body))).toEqual({
+      currentPassword: 'current-password',
+      newPassword: 'a-new-password-that-is-long-enough',
+    });
+
+    const deletionHeaders = new Headers(calls[4].init.headers);
+    expect(calls[4].init.method).toBe('DELETE');
+    expect(deletionHeaders.get('X-CSRF-Token')).toBe('account-csrf');
+    expect(JSON.parse(String(calls[4].init.body))).toEqual({
+      currentPassword: 'current-password',
+      confirmation: 'DELETE',
+    });
+    expect(calls.every((call) => call.init.credentials === 'same-origin')).toBe(true);
+  });
+});

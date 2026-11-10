@@ -33,6 +33,11 @@ import {
   sendEmail,
   type EmailMessage,
 } from '../services/emailService.js';
+import {
+  createPasswordChangedEmail,
+  createPasswordResetEmail,
+  createVerificationEmail,
+} from '../services/accountEmails.js';
 
 const GENERIC_ACTION_MESSAGE =
   'If an account is eligible, instructions will be sent to its email address.';
@@ -67,56 +72,6 @@ function parseInput<T>(
     throw new ApiError(422, 'VALIDATION_ERROR', 'Account action details are invalid.', { fields });
   }
   return parsed.data;
-}
-
-function emailUrl(config: EmailServiceConfig, parameter: 'verifyEmail' | 'resetPassword', token: string): string {
-  const url = new URL('/', config.appBaseUrl);
-  // URL fragments are not sent to the web server in the initial GET request.
-  url.hash = new URLSearchParams([[parameter, token]]).toString();
-  return url.toString();
-}
-
-function verificationEmail(config: EmailServiceConfig, email: string, token: string): EmailMessage {
-  return {
-    to: email,
-    subject: 'Verify your Launchboard email',
-    text: [
-      'Verify your email address to activate your Launchboard account.',
-      '',
-      emailUrl(config, 'verifyEmail', token),
-      '',
-      'This link expires in 24 hours and can only be used once.',
-      'If you did not request this account, you can ignore this email.',
-    ].join('\n'),
-  };
-}
-
-function passwordResetEmail(config: EmailServiceConfig, email: string, token: string): EmailMessage {
-  return {
-    to: email,
-    subject: 'Reset your Launchboard password',
-    text: [
-      'A password reset was requested for your Launchboard account.',
-      '',
-      emailUrl(config, 'resetPassword', token),
-      '',
-      'This link expires in 1 hour and can only be used once.',
-      'If you did not request this change, you can ignore this email.',
-    ].join('\n'),
-  };
-}
-
-function passwordChangedEmail(email: string): EmailMessage {
-  return {
-    to: email,
-    subject: 'Your Launchboard password was changed',
-    text: [
-      'The password for your Launchboard account was changed.',
-      'All existing sign-in sessions were revoked.',
-      '',
-      'If you did not make this change, contact support for assistance.',
-    ].join('\n'),
-  };
 }
 
 export function createAccountActionsRouter(
@@ -310,7 +265,7 @@ export function createAccountActionsRouter(
           await connection.commit();
           await sendWithoutDisclosure(
             emailConfig,
-            verificationEmail(emailConfig, user.email, token.token),
+            createVerificationEmail(emailConfig, user.email, token.token),
           );
         } else {
           await connection.commit();
@@ -367,7 +322,7 @@ export function createAccountActionsRouter(
           await connection.commit();
           await sendWithoutDisclosure(
             emailConfig,
-            passwordResetEmail(emailConfig, user.email, token.token),
+            createPasswordResetEmail(emailConfig, user.email, token.token),
           );
         } else {
           await connection.commit();
@@ -459,7 +414,12 @@ export function createAccountActionsRouter(
       if (email) {
         try {
           const emailConfig = parseEmailEnv(process.env);
-          if (emailConfig) await emailSender(emailConfig, passwordChangedEmail(email));
+          if (emailConfig) {
+            await emailSender(
+              emailConfig,
+              createPasswordChangedEmail(email, emailConfig.appBaseUrl, 'password-reset'),
+            );
+          }
         } catch {
           // Never undo a completed password reset because notification delivery failed.
         }

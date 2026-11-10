@@ -17,6 +17,10 @@ describe('OpportunityForm', () => {
 
     expect(screen.getByText('Title is required.')).toBeInTheDocument();
     expect(screen.getByText('Company or client is required.')).toBeInTheDocument();
+    expect(screen.getByText('Choose an opportunity type.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Type *')).toHaveValue('');
+    expect(screen.getByLabelText(/Job locations/)).toHaveValue('');
+    expect(screen.getByLabelText(/Employer employment type/)).toHaveValue('');
     expect(onSave).not.toHaveBeenCalled();
   });
 
@@ -29,6 +33,7 @@ describe('OpportunityForm', () => {
     fireEvent.change(screen.getByLabelText(/Company or client/), {
       target: { value: '  Northwind Labs  ' },
     });
+    fireEvent.change(screen.getByLabelText('Type *'), { target: { value: 'Internship' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(onSave).toHaveBeenCalledWith(
@@ -48,6 +53,7 @@ describe('OpportunityForm', () => {
 
     fireEvent.change(screen.getByLabelText(/Title/), { target: { value: 'Platform Engineer' } });
     fireEvent.change(screen.getByLabelText(/Company or client/), { target: { value: 'Northwind' } });
+    fireEvent.change(screen.getByLabelText('Type *'), { target: { value: 'Full-time' } });
     fireEvent.change(screen.getByLabelText(/Compensation \(as advertised\)/), {
       target: { value: 'EGP 15,000–20,000 monthly' },
     });
@@ -95,6 +101,7 @@ describe('OpportunityForm', () => {
     fireEvent.change(screen.getByLabelText(/Company or client/), {
       target: { value: 'Northwind Labs' },
     });
+    fireEvent.change(screen.getByLabelText('Type *'), { target: { value: 'Internship' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(

@@ -99,7 +99,7 @@ describe('opportunity create/update schemas', () => {
 
   it('rejects unknown controlled values', () => {
     for (const overrides of [
-      { type: 'Contract' },
+      { type: 'Unsupported' },
       { status: 'Pending' },
       { priority: 'Urgent' },
       { activities: [{ ...validActivity, type: 'Unknown activity' }] },
@@ -451,7 +451,7 @@ describe('imported record schema', () => {
 
   it('rejects invalid controlled values, dates and metadata types', () => {
     for (const overrides of [
-      { type: 'Contract' },
+      { type: 'Unsupported' },
       { deadline: '2026-02-30' },
       { archivedAt: '2026-02-30T00:00:00Z' },
       { archivedAt: 'yesterday' },

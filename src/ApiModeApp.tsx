@@ -26,6 +26,7 @@ import { Calendar } from './pages/Calendar';
 import { Deadlines } from './pages/Deadlines';
 import { Reports } from './pages/Reports';
 import { ActionCenter, type TaskFocusTarget } from './pages/ActionCenter';
+import { AccountSettings } from './pages/AccountSettings';
 import {
   SYSTEM_ACTIVITY_TYPE,
   type ActivityDraft,
@@ -47,7 +48,7 @@ import {
   type OpportunityResource,
   type VersionedOpportunityRef,
 } from './data/httpOpportunityRepository';
-import { ApiRequestError, previewOpportunityCapture } from './data/apiClient';
+import { ApiRequestError, getAccountProfile, previewOpportunityCapture } from './data/apiClient';
 import { commitApiTaskMutation, type TaskCollectionMutation } from './data/taskOperations';
 import { getLocalMigrationMarker } from './data/localMigration';
 import { createId } from './utils/id';
@@ -157,6 +158,7 @@ function replaceResource(
 
 export default function ApiModeApp() {
   const auth = useAuth();
+  const [accountDisplayName, setAccountDisplayName] = useState('');
   const [showAccountActionFlow, setShowAccountActionFlow] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ''));
@@ -212,6 +214,27 @@ export default function ApiModeApp() {
   const mutationLock = useRef(false);
 
   const userId = auth.state.status === 'authenticated' ? auth.state.user.id : null;
+
+  useEffect(() => {
+    if (!userId) {
+      setAccountDisplayName('');
+      return;
+    }
+
+    let active = true;
+    void getAccountProfile()
+      .then(({ profile }) => {
+        if (active) setAccountDisplayName(profile.displayName);
+      })
+      .catch(() => {
+        if (active) setAccountDisplayName('');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
   const activeUserIdRef = useRef<string | null>(userId);
   activeUserIdRef.current = userId;
   const collection = storedCollection?.userId === userId ? storedCollection.value : null;
@@ -319,10 +342,16 @@ export default function ApiModeApp() {
   async function saveOpportunity(data: OpportunityFormData): Promise<boolean> {
     if (!userId || !editor) return false;
     setMutationError(null);
+    const { type, ...formFields } = data;
+    if (!type) {
+      setMutationError('Choose an opportunity type before saving.');
+      return false;
+    }
+    const validData = { ...formFields, type };
     try {
       if (editor.mode === 'create') {
         const opportunity: Opportunity = {
-          ...data,
+          ...validData,
           id: createId(),
           activities: [],
           interviews: [],
@@ -334,7 +363,7 @@ export default function ApiModeApp() {
         setCollection((current) => replaceResource(current, created));
       } else {
         const previous = editor.resource.opportunity;
-        const next: Opportunity = { ...previous, ...data };
+        const next: Opportunity = { ...previous, ...validData };
         const updated = await repository.update(
           previous.id,
           editor.resource.version,
@@ -1062,13 +1091,22 @@ export default function ApiModeApp() {
             >
               Migrate local data
             </button>
+            <button
+              type="button"
+              className="lb-migration-button lb-settings-button"
+              aria-current={view === 'settings' ? 'page' : undefined}
+              onClick={() => setView('settings')}
+            >
+              Settings
+            </button>
             <div className="lb-user-block">
               <span className="lb-user-avatar" aria-hidden="true">
-                {auth.state.user.email.slice(0, 1)}
+                {(accountDisplayName || auth.state.user.email).slice(0, 1)}
               </span>
               <div className="lb-user-copy">
                 <span>Signed in as</span>
-                <strong>{auth.state.user.email}</strong>
+                <strong title={auth.state.user.email}>{accountDisplayName || auth.state.user.email}</strong>
+                {accountDisplayName && <span>{auth.state.user.email}</span>}
               </div>
             </div>
             <button
@@ -1081,8 +1119,10 @@ export default function ApiModeApp() {
             </button>
             <MobileAccountMenu
               email={auth.state.user.email}
+              displayName={accountDisplayName}
               disabled={auth.busy || mutationBusy}
               onMigrate={() => setShowMigration(true)}
+              onSettings={() => setView('settings')}
               onSignOut={() => void auth.signOut()}
             />
           </div>
@@ -1096,7 +1136,7 @@ export default function ApiModeApp() {
             </span>
             <span className="lb-context-detail">
               {collection
-                ? `${collection.items.length} opportunities tracked · revision ${collection.revision}`
+                ? `${collection.items.length} opportunities tracked`
                 : 'Your opportunities are saved to your Launchboard account.'}
             </span>
             {migrationMarker && (
@@ -1161,7 +1201,16 @@ export default function ApiModeApp() {
           </div>
         )}
 
-        {!collection ? (
+        {view === 'settings' ? (
+          <AccountSettings
+            onDisplayNameChange={setAccountDisplayName}
+            onAccountDeleted={async () => {
+              setCollection(null);
+              setView('opportunities');
+              await auth.refresh();
+            }}
+          />
+        ) : !collection ? (
           <p role="status" className="rounded-card border border-border bg-surface p-s5 text-sm text-muted">
             {loading ? 'Loading your server opportunities…' : 'No server collection is loaded.'}
           </p>

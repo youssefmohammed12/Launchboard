@@ -26,6 +26,7 @@ import {
   StatusBadge,
   TagList,
 } from './Badges';
+import { normalizeWorkplaceDetails } from '../utils/opportunities';
 import { Modal } from './Modal';
 import { ContactSection } from './ContactSection';
 import { InterviewSection } from './InterviewSection';
@@ -175,12 +176,12 @@ export function DetailsDialog({
         item.compensationDetails.interval ? '/' + item.compensationDetails.interval : '',
       ].filter(Boolean).join(' ')
     : '';
+  const workplaceDetails = normalizeWorkplaceDetails(item);
   const rows: [string, string][] = [
     ['Company', item.company],
-    ['Type', item.type],
-    ['Employment type', item.employmentType || '—'],
-    ['Workplace', item.workplaceType || '—'],
-    ['Locations', item.locations.join(' · ') || '—'],
+    ['Employment type', workplaceDetails.employmentType || item.type || '—'],
+    ['Work mode', workplaceDetails.workplaceType || '—'],
+    ['Locations', workplaceDetails.locations.join(' · ') || '—'],
     ['Department', item.department || '—'],
     ['Team', item.team || '—'],
     ['Posted date', item.postedDate ? formatDate(item.postedDate) : '—'],
@@ -413,7 +414,7 @@ export function DetailsDialog({
 
           {activities.length === 0 ? (
             <p className="m-0 rounded-control border border-dashed border-border p-s3 text-center text-[0.85rem] text-muted">
-              No activity yet. Add the first update above.
+              No updates recorded yet. Scheduled follow-ups and interviews are shown in their sections above.
             </p>
           ) : (
             <ol className="m-0 grid list-none gap-s2 p-0">

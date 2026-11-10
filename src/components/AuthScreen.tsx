@@ -277,7 +277,7 @@ export function AuthScreen({
                     type="password"
                     name="password"
                     autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                    minLength={15}
+                    minLength={mode === 'register' ? 15 : undefined}
                     maxLength={128}
                     required
                     value={password}

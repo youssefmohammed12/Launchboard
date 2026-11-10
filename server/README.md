@@ -69,7 +69,9 @@ npm run db:verify-live
 
 Migrations are versioned and checksum-verified. The application does not create databases or run migrations automatically at startup. The runner refuses a target database other than `launchboard`.
 
-The current schema is defined by the numbered SQL files in `database/migrations/`. Never edit an already-applied migration; add a new migration for schema changes. Back up the database before applying production migrations.
+The current schema is defined by the numbered SQL files in `database/migrations/`. The repository migration sequence currently runs through `007_opportunity_contract_type.sql`. Migration 006 adds `users.display_name VARCHAR(80) NOT NULL DEFAULT ''` and was applied to hosted Launchboard TiDB on 10 November 2026 after a fresh verified backup and isolated restore test. Migration 007 extends `chk_opportunities_type` with `Contract` and was applied to hosted Launchboard TiDB on 10 November 2026 after a fresh SQL/GZIP export, full download and checksum/decompression verification. Its DDL is intentionally split into separate DROP and ADD statements because TiDB does not support combining CHECK drop/add in one ALTER TABLE. Hosted schema history now runs through 007. The workstation's local XAMPP database is separate and has not been changed by the hosted migrations.
+
+Never edit an already-applied migration; add a new migration for schema changes. Back up the database before applying production migrations.
 
 ## API and security model
 
@@ -84,7 +86,9 @@ The API uses:
 - Transactional bulk operations, Undo batches, and backup import/replace.
 - Generic account-action responses to reduce email/account enumeration.
 
-Email is delivered through Gmail SMTP using Nodemailer. A standard Gmail account is intended only for low-volume use. Rate-limit counters are process-local, so use a shared store before running multiple API instances.
+Email is delivered through Gmail SMTP using Nodemailer. Shared account templates send both plain-text and responsive HTML messages for registration verification, verification resend, password-reset requests, and password-change notifications. Password-reset and verification links retain their one-time, fragment-token behavior and existing expiry windows. A standard Gmail account is intended only for low-volume use. Rate-limit counters are process-local, so use a shared store before running multiple API instances.
+
+Authenticated account self-service routes live in `src/routes/accountSettings.ts`: profile read/update, password change and account deletion. Mutations require the active session, exact trusted Origin, JSON content type, authenticated CSRF token and dedicated IP rate limits.
 
 ## Health endpoints
 

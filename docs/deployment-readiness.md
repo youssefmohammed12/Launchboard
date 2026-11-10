@@ -1,15 +1,23 @@
 # Launchboard deployment
 
+## Current release and database status — 10 November 2026
+
+- **Deployed application:** v1.3.0 Quick Capture remains the Production version. Latest deployment: `dpl_4ePAkd6wgGTDMz1qmCEKKo8TKRiX`, from commit `4c1b3a035cb6a7c2507b546456d3edd39a0710e3`.
+- **Local candidate:** v1.3.5 Account & Opportunity Workflow Polish is implemented and documented locally, and its release entry is present in the in-app What's New history. The API-mode frontend, API handler and 7-file upload manifest have been refreshed and preflighted. It is not committed, pushed, preview-deployed or production-deployed.
+- **Hosted TiDB:** migrations 006 and 007 are applied to the dedicated `launchboard` database. Migration 006 followed a fresh verified backup and isolated restore; migration 007 followed a fresh successful SQL/GZIP export, 24/24 download and SHA-256/GZIP integrity verification. Live postflight confirms history 001–007, Contract in the opportunities CHECK definition, CHECK enforcement enabled, and unchanged user/opportunity counts (5/13). The read-only runtime-grant audit for `lb_app` remains scoped to `launchboard.*`.
+- **Remaining release checks:** exact-source-SHA commit/push, Preview build and non-destructive routing/API checks, then the Production deployment and live non-destructive smoke requested for this release. The persistent Preview shares Production TiDB; do not use it for destructive account tests.
+- **Outstanding verification limitation:** the rollback-only cascade probe using the actual restricted runtime credential was not run. The live runtime password was not retrieved. The new email HTML was not visually checked in Gmail and no test email was sent.
+
 ## Current production deployment
 
 Last checked: **8 November 2026**.
 
 - **Application:** https://launchboard-drab.vercel.app.
 - **Hosting:** Vercel Hobby, Node.js 24.x, Frankfurt region (fra1).
-- **Database:** TiDB Cloud Serverless, database launchboard.
-- **Latest production deployment:** dpl_2AS7rWRJZVU4YAr8nNyR3bHuWY2D (READY, production target).
-- **Deployed Git commit:** 898a743d18af128f6dea1d21013623ba74744201 (fix: align capture types with Vercel API target).
-- **Immutable deployment URL:** https://launchboard-kdc1pt0iy-youssef-workplace.vercel.app.
+- **Database:** TiDB Cloud Serverless v8.5.3, eu-central-1, database launchboard.
+- **Latest production deployment:** `dpl_4ePAkd6wgGTDMz1qmCEKKo8TKRiX` (READY, Production target).
+- **Deployed Git commit:** `4c1b3a035cb6a7c2507b546456d3edd39a0710e3` (`fix: restore nested Vercel API routing`).
+- **Assigned production aliases:** `launchboard-drab.vercel.app`, `launchboard-youssef-workplace.vercel.app`, and `launchboard-git-main-youssef-workplace.vercel.app`.
 - The v1.3.0 production release includes Quick Capture, supported employer/ATS public page suggestions, field-level provenance, structured job details, duplicate warnings, manual fallback and the in-app What's New experience. LinkedIn URLs are retained for manual entry; automatic LinkedIn access is disabled.
 
 ### Post-deployment read-only smoke
@@ -18,14 +26,37 @@ Last checked: **8 November 2026**.
 - Referenced JavaScript and CSS assets: HTTP 200.
 - /api/health: HTTP 200 (status=ok).
 - /api/ready: HTTP 200 (status=ok, db=ok).
-- Unauthenticated /api/opportunities: HTTP 401, as expected.
+- Unauthenticated `/api/auth/me`, `/api/auth/csrf`, and `/api/opportunities`, plus `POST /api/capture/preview`: expected HTTP 401 authentication guards, not 404 or SPA HTML.
+- A synthetic `POST /api/auth/login` with a reserved `.invalid` email and dummy password reached the pre-authentication guard and returned HTTP 403, not 404. No real credentials or authenticated session were used.
 - Vercel deployment build completed and state is READY. The final API catch-all source was also checked with the repository's ES2020 compiler settings after replacing five unsupported Array.at() usages with equivalent index access.
 
 No opportunity records, accounts or database schema were changed during post-deployment verification. No migration was re-run. A production authenticated CRUD test was intentionally not performed.
 
+## Mandatory release verification gate
+
+For every Production release, a successful build, READY deployment, homepage 200, or `/api/health` response alone is insufficient. Follow these steps in order:
+
+1. Record the full candidate Git SHA, branch and deployment method. Inspect `git status` and identify every intended release file.
+2. Deploy the candidate as a Preview and verify its Vercel source metadata contains that exact SHA. A Preview from an older commit or different branch tip does not validate the candidate. Do not treat a persistent alias's earlier successful deployment as proof for a newer candidate.
+3. Inspect the routing config used by the actual deployment path. Source-based deployment uses root `vercel.json`; the separate `deployment/vercel.json` is used by the prebuilt workflow. Keep both configurations behaviorally aligned: nested `/api/:path*` must rewrite to `/api/[...]` **before** the SPA fallback, and root function `api/[...].ts` must match. Test the same deployment workflow/configuration intended for Production.
+4. On Preview, verify:
+   - SPA routes `GET /` and `GET /login` return HTML (HTTP 200), with referenced JS/CSS assets loading successfully.
+   - `GET /api/health` and `GET /api/ready` return the expected API responses and database readiness.
+   - Critical nested API routes `GET /api/auth/me`, `GET /api/auth/csrf`, `GET /api/opportunities`, and `POST /api/capture/preview` return expected authentication guards when unauthenticated (such as 401), not 404 or SPA HTML. Add probes for every route changed by the candidate.
+   - A route-only `POST /api/auth/login` probe may use a reserved `.invalid` email and dummy password to verify the pre-auth guard (expected 403 without a valid pre-auth session). Never use real user credentials for a smoke test.
+5. After explicit release approval, deploy the **same exact SHA**. Confirm Production is READY, its deployed source SHA matches the Preview-accepted SHA, and the canonical/secondary aliases point to it.
+6. Repeat SPA, asset, health/readiness and critical nested API probes against the canonical Production domain after deployment. Preview success does not prove Production routing or alias assignment is correct.
+7. Report the SHA, Preview and Production deployment identities, every endpoint/method/status tested, and any unverified authenticated or destructive behavior. A 401/403 proves route reachability only; it does not prove that real-user login works.
+
+### 8 November 2026 incident — release check failure and prevention
+
+The first v1.3 Production deployment served the homepage but nested authentication routes returned 404. Source-based Production used root `vercel.json`, which lacked the nested API rewrite; the separate prebuilt config already contained it. The previous QA Preview was built from `db155ff`, while the original Production deployment used `898a743d18af128f6dea1d21013623ba74744201`, so the Preview was not the same candidate. The old smoke set checked the homepage, health/readiness and one unauthenticated API guard, but did not probe nested auth routes.
+
+Root routing and catch-all naming were corrected in commit `4c1b3a035cb6a7c2507b546456d3edd39a0710e3`. A candidate-specific Preview and the final Production deployment used that exact SHA; nested route probes passed on Preview and then on the canonical Production domain. The checklist above is mandatory for future releases.
+
 ## Architecture
 
-The frontend is a Vite-built React SPA served from `dist/`. The Express API is exposed through the root Vercel Function adapter at `api/[...path].ts`. API and browser requests share the same HTTPS origin, so session cookies and CSRF protections work without cross-origin browser requests.
+The frontend is a Vite-built React SPA served from `dist/`. The Express API is exposed through the root Vercel Function adapter at `api/[...].ts`. API and browser requests share the same HTTPS origin, so session cookies and CSRF protections work without cross-origin browser requests.
 
 The root `vercel.json` is intended for a source-based Vercel deployment. It keeps the SPA fallback away from `/api/`; Vercel discovers the API function from the root `api/` directory. The separate `deployment/vercel.json` is the configuration template for the historical prebuilt-upload workflow, where the function bundle is assembled under `deployment/api/`.
 
@@ -62,11 +93,11 @@ The application never creates a database or runs migrations automatically at sta
 
 The source checkout includes:
 
-- `api/[...path].ts` — Vercel API entry point.
-- `vercel.json` — frontend build output and SPA fallback configuration.
+- `api/[...].ts` — Vercel API catch-all entry point (the rewrite destination is `/api/[...]`).
+- Root `vercel.json` — source-based deployment routing; nested `/api/:path*` rewrite must precede the SPA fallback.
 - `package-lock.json` — reproducible npm workspace dependency graph.
 
-A Git-connected Vercel project should use the repository root as its Root Directory and install dependencies with `npm ci`. Verify the Vercel function route and the API/SPA routing on a preview deployment before changing the production project's Git source.
+A Git-connected Vercel project should use the repository root as its Root Directory and install dependencies with `npm ci`. Follow the mandatory exact-SHA Preview and nested-route gate above before deploying. Keep the API rewrite behavior in root `vercel.json` aligned with `deployment/vercel.json`; the two files serve different deployment workflows and are not automatically interchangeable.
 
 ## Prebuilt deployment helpers
 
@@ -329,16 +360,133 @@ Current behavior is documented in the v1.3.0 release note: LinkedIn hosts are bl
 
 ## v1.3.0 production release — 8 November 2026
 
-- **Release:** Quick Capture v1.3.0; Git release tag ui-v1.3.0; production application at https://launchboard-drab.vercel.app. The production deployment is READY: dpl_2AS7rWRJZVU4YAr8nNyR3bHuWY2D, built from commit 898a743d18af128f6dea1d21013623ba74744201; immutable URL https://launchboard-kdc1pt0iy-youssef-workplace.vercel.app.
+- **Release:** Quick Capture v1.3.0; Git release tag ui-v1.3.0; production application at https://launchboard-drab.vercel.app. The production deployment is READY: dpl_4ePAkd6wgGTDMz1qmCEKKo8TKRiX, built from commit 4c1b3a035cb6a7c2507b546456d3edd39a0710e3; production aliases are listed in the current deployment checkpoint above.
 - **Scope:** review-first metadata suggestions from supported public employer/ATS pages, field-level provenance/confidence, editable structured job details, duplicate warnings, manual fallback, and the in-app release spotlight/history.
 - **LinkedIn safety:** LinkedIn job/detail/search/regional URLs are rejected before any server network request. The UI preserves the pasted URL and sends the user to manual entry. The former page-title parsing special case was removed. No LinkedIn page content is fetched, scraped or copied by Launchboard.
 - **Database:** migration 005_opportunity_job_details.sql was already present in the live migration history; it was not rerun during this deployment. No opportunity data was modified by this release process.
 - **Edge protection:** the existing active Vercel WAF rule remains in place for POST /api/capture/preview (five requests per 60 seconds per IP, deny after limit). No WAF change was required for this release.
 - **Production environment metadata:** CAPTURE_PREVIEW_ENABLED and TRUSTED_ORIGINS were inspected without decrypting secrets and were not changed during this release. The temporary QA-origin cleanup remains a separate operational item; do not expose or copy secret values.
-- **Post-deploy read-only checks passed:** canonical homepage and generated JS/CSS assets returned HTTP 200; /api/health returned HTTP 200 (status=ok); /api/ready returned HTTP 200 (status=ok, db=ok); unauthenticated /api/opportunities returned HTTP 401 as expected.
+- **Final post-correction route checks passed:** `/` and `/login` returned HTTP 200; `/api/health` and `/api/ready` returned HTTP 200 (`db=ok`); unauthenticated `/api/auth/me`, `/api/auth/csrf`, `/api/opportunities` and `POST /api/capture/preview` returned expected 401 guards; synthetic `POST /api/auth/login` reached the pre-auth guard and returned 403. No real credentials or authenticated session were used.
 - **Vercel build:** the root install command is npm ci --include=dev so workspace TypeScript/Vite build dependencies are present. Vercel built the 1,644-module Vite application and deployed the API catch-all in Frankfurt. The final catch-all ES2020 TypeScript check passed; no Array.at compiler diagnostics remained.
 - **Automated verification:** frontend/domain 670/670 tests, server 615/615 tests, frontend TypeScript check, server TypeScript check, Vite production build (1,644 modules), and server production build passed.
-- **User-data boundary:** no production CRUD test, account mutation, opportunity save, migration execution or destructive Preview test was performed. The persistent Preview shares the production TiDB database.
+- **User-data/auth boundary:** no real account credentials or authenticated session were used; no production CRUD test, account mutation, opportunity save, migration execution or destructive Preview test was performed. The persistent Preview shares the production TiDB database.
 - **Remaining limitation:** the three user-tested Preview examples (Ashby/Chatbase, Workable/EVA Pharma, Lever/SOUM) reached the ready review state, but the report contained provenance labels rather than complete field values. Complete content accuracy and a fresh authenticated production browser acceptance are not claimed. The separate post-migration backup restore and live runtime-grant audit remain outstanding checks.
 
 The concise, published version history is maintained in docs/v1.2-release-notes.md and docs/v1.3-release-notes.md. Detailed v1.2/v1.3 design and staged implementation documents are intentionally retained only in the local working copy.
+
+
+## 2026-11-10 — Account Settings implementation design snapshot (historical; migration status superseded below)
+
+This section records the original implementation/release-gate snapshot from before the backup and migration work later on 10 November. Its statements that migration 006 was pending are superseded by the later **“Fresh Launchboard backup verified; migration 006 applied”** section.
+
+### Scope implemented locally
+- **Profile:** authenticated users can set an optional display name (80 characters maximum). It appears in the signed-in header and mobile account panel. The sign-in email is displayed read-only.
+- **Email boundary:** email changes are intentionally not exposed. A future email-change flow must verify ownership of the new address before changing the login identifier and invalidating/replacing sessions.
+- **Password:** users must provide their current password and a new password that satisfies the existing 15-character policy. The update uses a conditional write to avoid overwriting a concurrent password change, revokes all other active sessions, preserves the current session, and attempts a password-change notification email without rolling back the committed update if delivery fails.
+- **Account deletion:** requires current-password verification and the exact word DELETE as confirmation. In one transaction, the user's interviews are removed first because the schema restricts deletion of contacts still referenced by interviews; then the user row is deleted and existing foreign-key cascades remove sessions, opportunities and remaining opportunity-owned records. The current session cookie and client-side authenticated CSRF state are cleared after success. The UI warns users to export a backup first.
+- **Mutation protections:** account mutations require the existing authenticated session, exact trusted Origin, JSON content type and authenticated CSRF token. Profile updates, password changes and account deletions have separate IP rate limits.
+- **Database:** new additive migration 006_account_profile.sql adds users.display_name with an empty default for existing users.
+
+### Release gates — status at the original implementation checkpoint (migration status superseded below)
+1. Make and verify a current backup of the dedicated Launchboard database before applying migration 006. Do not use the persistent Vercel Preview as a sandbox; it shares Production TiDB.
+2. Run the migration verifier and confirm the selected database is exactly launchboard. Apply migration 006 once through the documented migration account/process, then verify the recorded migration and new column. Never print or copy database credentials into logs.
+3. Run the full frontend/domain and server suites, strict TypeScript checks, frontend production build, server production build and git diff --check.
+4. Deploy a candidate Preview from the exact reviewed source SHA. Confirm Vercel deployment source SHA matches, SPA routes load, and /api/health, /api/ready, /api/auth/me, /api/account/profile, nested auth routes and the opportunity API reach the intended handlers. Expected unauthenticated 401 responses prove route reachability only.
+5. After Production deployment, repeat the route checks on the canonical Production domain and perform a non-destructive signed-in profile read/update only with explicit user approval. Do not test account deletion or password changes against a real account as part of routine release smoke.
+6. Keep migration and deployment status separate. Until migration 006 is applied and verified, the new server code must not be promoted to a runtime that reads users.display_name.
+
+**Historical status at this point in the log:** source and tests were prepared locally and migration 006 was still pending. The later 10 November backup, restore and migration record below supersedes that database status. The application source remains local and undeployed.
+
+
+## 2026-11-10 — Settings release candidate prepared locally (NOT COMMITTED / NOT DEPLOYED)
+
+### Account Settings delivered in the local working tree
+- Authenticated **Profile** section: optional display name (maximum 80 characters), email address shown read-only, verified status shown, and the display name is reflected in the desktop account header and mobile account menu.
+- **Change password:** requires the current password and the existing 15-character new-password policy. The password write is conditional on the previously verified hash, the current session is rechecked in the transaction, all other active sessions are revoked, and a best-effort password-change notice is sent. The current browser session is retained.
+- **Delete account:** requires the current password and the exact uppercase word DELETE. The current session is rechecked inside the transaction. Interviews are deleted first because their composite contact reference uses ON DELETE RESTRICT; the user row is then deleted so user/session/opportunity/action-token cascades can complete. The current session cookie and client CSRF state are cleared after success. The UI clearly advises exporting a backup before deletion.
+- Account mutations use the authenticated session, exact trusted Origin, JSON content type, authenticated CSRF token, strict input schemas and separate IP rate limits.
+- Email changes are intentionally not exposed; changing a login email needs a dedicated verify-new-address flow.
+
+### Database change originally prepared (historical status at this checkpoint)
+- New additive migration: `server/database/migrations/006_account_profile.sql`.
+- Adds `users.display_name VARCHAR(80) NOT NULL DEFAULT ''`; existing users receive an empty display name without changing login identifiers.
+- The live-schema verifier now requires this exact new column and migration 006.
+- **At the time this section was first written, migration 006 had not been run.** The later 10 November backup, restore and migration section below records its successful application and verification.
+
+### Full local verification
+- Frontend/domain: **681/681 tests passed across 57 files**.
+- Backend: **628/628 tests passed across 38 files**.
+- Frontend TypeScript/Vite production build: passed (Vite 6.4.5; 1,645 modules).
+- Strict server TypeScript check: passed.
+- Server production TypeScript build: passed.
+- `git diff --check`: passed (Git emitted only the known LF-to-CRLF working-copy notices).
+- A first unconstrained frontend run hit one 5-second timeout in the Action Center task-limit test; that file passed in isolation (10/10), then the complete suite passed with two workers. This is recorded to distinguish the resolved test-load timeout from a functional defect.
+
+### Prebuilt package prepared and checked locally
+- Rebuilt the frontend explicitly with `VITE_DATA_MODE=api` (Vite 6.4.5; 1,645 modules). The staged JS asset is `assets/index-BmgfBWIf.js`; CSS is `assets/index-BYgL9hDC.css`.
+- Corrected `deployment/build-api.mjs` to bundle the actual `api/[...].ts` source entry point; the previous script referenced a non-existent `api/[...path].ts`.
+- Rebuilt the Node 24 Vercel handler at `deployment/api/[...].js`.
+- Regenerated `deployment/upload-manifest.json` and `deployment/api-bundle.b64`.
+- Rebuilt the clean, ignored `deployment/release-stage/` folder from the API-mode frontend output, current favicon, runtime package, Vercel routing config and bundled API handler.
+- Added `deployment/verify-upload-manifest.mjs`. It verifies manifest payload sizes/SHA-1 values against the staged files, verifies every staged file has a manifest entry (and no stale extras), checks that HTML asset references are present, confirms the Node 24/Argon2 runtime package, and ensures the nested API rewrite precedes the SPA fallback.
+- Local release preflight result: **PASS — 7/7 manifest files and staged checksums verified**. No network calls or database operations were performed by this verifier.
+
+### Release boundary at the original implementation checkpoint (historical; current status below)
+- Branch remains `feature/quick-capture-v1.3`. All changes are local and uncommitted; existing pre-existing worktree changes were preserved.
+- **No commit, push, Vercel deployment, alias change, environment-variable change or database migration was performed.**
+- Do not deploy this candidate until migration 006 has been backed up, applied to the dedicated `launchboard` database using the separate migration account, and verified by the updated live-schema verifier.
+- The persistent QA Preview shares Production TiDB and is not an isolated test database. Do not use it for destructive Settings checks. A deployment smoke may verify unauthenticated route reachability, but password changes and account deletion must not be exercised against a real account.
+- After explicit release approval, review the intended Git file set, create a reviewed candidate commit, deploy an exact-SHA Preview, and run the documented SPA/API checks. Migration 006 is already applied and must not be run again. Decide separately whether to deploy Production.
+
+**Current decision at this historical checkpoint:** Account Settings implementation, local tests, strict checks, production builds and prebuilt upload package were ready locally. At that time, the candidate was not committed, pushed, migrated or deployed. The later 10 November record below supersedes the migration status: migration 006 is now applied and verified; the application remains uncommitted, unpushed and undeployed.
+
+
+## 2026-11-10 — Branded account emails added to the local Settings candidate
+
+- Added a shared, responsive, table-based Launchboard email design with a teal action button, clear security copy, a plain-text fallback and a consistent automated-message footer.
+- Applied the templates to new-account email verification, resend verification, password-reset requests, and the password-change notices sent after a reset or an Account Settings password change.
+- Preserved the existing verification/reset fragment URLs, one-time-token behavior, and expiries (24 hours for verification; one hour for password reset). The plain-text version keeps the raw fallback URL on its own line.
+- Extended the email service to send optional HTML alongside the plain-text part through the existing Gmail SMTP transport. No SMTP configuration or secret values were changed.
+- Added template and delivery tests, and strengthened registration/recovery route assertions.
+- Post-email verification: **632/632 server tests passed across 39 files**; strict server TypeScript check and production server build passed.
+- Rebuilt the Vercel API bundle and refreshed deployment/release-stage/api/[...].js, deployment/upload-manifest.json, and deployment/api-bundle.b64. The upload-manifest preflight passed for all seven files.
+- The frontend assets were unchanged by this server-only update. No email was sent during verification.
+- **Release boundary unchanged:** no commit, push, migration, deployment, Vercel configuration change, or live database access was performed.
+
+
+## 2026-11-10 — Fresh Launchboard backup verified; migration 006 applied
+
+### Backup and isolated restore
+- Created a fresh TiDB Cloud Serverless export for the exact `launchboard.*` table filter on cluster `10974878170979400976` (Launchboard, Frankfurt, TiDB v8.5.3). Export ID: `exp-vdelffobrbacnllfxg4733ygbq`; snapshot timestamp: `2026-11-10T20:46:27.208Z`; format SQL/GZIP; target LOCAL; provider task state SUCCEEDED.
+- Downloaded to `C:\\Users\\Youssef\\Documents\\LaunchboardBackups\\Launchboard-pre-migration-006-2026-11-10`. TiDB reported 24 files downloaded successfully, 0 skipped, 0 failed.
+- Created `MANIFEST.sha256.txt` with SHA-256 hashes for all compressed files and their decompressed SQL content. Integrity check passed: 24 GZIP streams decompressed, 14 table schemas identified, migration history was 001–005. Total compressed size 21,601 bytes; decompressed SQL size 50,333 bytes.
+- Restored the backup into a disposable MariaDB 10.11.16 instance bound only to `127.0.0.1:33118`, with its own temporary data directory. Restore verification passed: 14 tables, migration history exactly 001–005, and no `users.display_name` column before migration. Restored row counts: users 5; sessions 33; auth_pre_sessions 62; auth_action_tokens 8; opportunities 13; opportunity_locations 6; opportunity_tags 17; opportunity_deletions 5; tasks, activities, contacts, interviews and materials 0 each.
+- Restore evidence is saved as `RESTORE-VERIFICATION.json` beside the backup manifest. The temporary MariaDB process and data directory were removed; the normal XAMPP MariaDB service was not touched. The provider-side export staging expires 2026-11-12; retain the local downloaded backup folder.
+
+### Migration 006
+- Confirmed TiDB cluster identity and state before connecting: cluster `launchboard`, ID `10974878170979400976`, Frankfurt, TiDB v8.5.3, ACTIVE.
+- The workstation's existing local `server/.env` database target is `127.0.0.1:3306`; it was not used for this operation. The migration connection was explicitly pinned to the hosted TiDB endpoint, port 4000, TLS enabled, and database exactly `launchboard`. No `.env` values or passwords were printed or changed.
+- Preflight confirmed live migration history 001–005 and matching repository checksums, 14 tables, no existing `users.display_name`, and baseline row counts of 5 users and 13 opportunities.
+- The repository migration runner applied exactly `006_account_profile` and skipped the already-recorded 001–005 migrations.
+- Postflight confirmed history 001–006, 14 tables, and `users.display_name VARCHAR(80) NOT NULL DEFAULT ''`. User and opportunity row counts remained 5 and 13.
+- A follow-up live schema audit passed: 14 tables, 46 indexes, 13 foreign keys, zero schema failures; all migration checksums 001–006 match the checked-in SQL files.
+- Read-only `SHOW GRANTS` inspection of the existing `lb_app` account passed the runtime privilege policy: `SELECT`, `INSERT`, `UPDATE`, and `DELETE` scoped only to `launchboard.*`, plus ordinary `USAGE`; no extra global privileges or GRANT OPTION. No runtime password was retrieved. Both short-lived TiDB SQL accounts used for migration and schema verification were confirmed removed.
+
+### Remaining boundary
+- This completes the backup, isolated restore, migration 006, live schema/history verification, and read-only runtime-grant audit.
+- The full runtime-credential `db:verify-live` cascade probe was not run because the workstation `.env` is deliberately local XAMPP configuration and the live `lb_app` password was not retrieved. The schema and grants were verified separately without the runtime secret; the rollback-only cascade probe remains a separate check requiring an approved restricted runtime credential path.
+- No application deployment, Vercel environment/alias change, Git staging, commit or push was performed. The application source and refreshed release package remain local. Do not deploy until the exact candidate source is reviewed and separately approved.
+
+
+
+## 2026-11-10 — v1.3.5 schema release preparation: migration 007
+
+- **Purpose:** add the `Contract` value to the opportunity tracking-type constraint required by the local v1.3.5 candidate. Existing opportunity rows are not rewritten.
+- **Backup:** created TiDB SQL/GZIP export `Launchboard-pre-migration-007-2026-11-10` for exact table filter `launchboard.*` (cluster `10974878170979400976`). Export ID `exp-vxgqmsqjobe3rlfr2cnffvqvgi`; snapshot `2026-11-10T21:24:02.07Z`; provider state SUCCEEDED. Downloaded 24/24 files (0 skipped, 0 failed). Local folder: `%USERPROFILE%\Documents\LaunchboardBackups\Launchboard-pre-migration-007-2026-11-10`. The SHA-256 manifest covers compressed files and their decompressed SQL; all 24 GZIP streams decompressed and 14 table definitions were identified. Pre-migration history was 001–006. This backup was integrity-checked but not separately restored; the earlier pre-006 backup had the isolated MariaDB restore.
+- **TiDB DDL compatibility finding:** TiDB v8.5.3 rejects dropping and adding a CHECK constraint in one ALTER TABLE (`Unsupported multi schema change for drop check constraint`). Migration 007 therefore uses two ordered statements: drop the existing named constraint, then add the same constraint with Contract included. A short-lived test table verified this two-statement sequence and was dropped. No opportunity table changes were made by the probe.
+- **Application:** the repository migration runner verified `DATABASE() = launchboard` and migration history 001–006 before applying only `007_opportunity_contract_type`. It logged `Applied 007_opportunity_contract_type` and skipped six previously recorded migrations.
+- **Postflight:** TLS read-back using mysql2 confirmed hosted TiDB v8.5.3, migration history 001–007, `tidb_enable_check_constraint = 1`, and the actual `SHOW CREATE TABLE opportunities` definition includes Contract in `chk_opportunities_type`. User and opportunity row counts remain 5 and 13.
+- **Temporary credentials:** the dedicated short-lived migration SQL user was deleted; the SQL-user listing returned to the pre-existing accounts. No runtime password or `.env` value was retrieved or displayed.
+- **No user data CRUD:** no opportunity or user rows were added, edited or deleted. The local XAMPP database was not used or changed.
+
+**Release boundary:** migration 007 is applied and must not be rerun. The application candidate still requires the exact-SHA Preview verification and Production deployment sequence described above.

@@ -47,6 +47,7 @@ function addOpportunity(title: string): void {
   fireEvent.click(screen.getByRole('button', { name: 'Add Opportunity' }));
   fireEvent.change(screen.getByLabelText(/Title/), { target: { value: title } });
   fireEvent.change(screen.getByLabelText(/Company or client/), { target: { value: 'Acme' } });
+  fireEvent.change(screen.getByLabelText(/Type/), { target: { value: 'Internship' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 }
 
@@ -99,6 +100,7 @@ describe('App storage recovery', () => {
     fireEvent.change(screen.getByLabelText(/Company or client/), {
       target: { value: 'Northwind Labs' },
     });
+    fireEvent.change(screen.getByLabelText(/Type/), { target: { value: 'Internship' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save opportunity' }));
 
     expect(await screen.findByText('Local Frontend Intern')).toBeInTheDocument();

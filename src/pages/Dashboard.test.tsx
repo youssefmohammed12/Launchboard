@@ -43,6 +43,22 @@ function upcomingItems(): HTMLElement[] {
 }
 
 describe('Dashboard Next 7 Days', () => {
+  it('excludes the December 8 event from a November 10–16 seven-day range', () => {
+    vi.setSystemTime(new Date(2026, 10, 10, 12, 0, 0));
+    renderDashboard([
+      makeOpportunity({ id: 'today', title: 'Today Event', deadline: '2026-11-10' }),
+      makeOpportunity({ id: 'in-range', title: 'In Range Event', followUpDate: '2026-11-13' }),
+      makeOpportunity({ id: 'december', title: 'December Event', deadline: '2026-12-08' }),
+    ]);
+
+    const section = sectionByHeading('Next 7 Days');
+    expect(screen.getByText(/Today through Nov 16, 2026/)).toBeInTheDocument();
+    expect(within(section).getByText('Today Event')).toBeInTheDocument();
+    expect(within(section).getByText('In Range Event')).toBeInTheDocument();
+    expect(within(section).queryByText('December Event')).not.toBeInTheDocument();
+    expect(upcomingItems()).toHaveLength(2);
+  });
+
   it('shows the inclusive range in chronological order with type, date and relative labels', () => {
     const items = [
       makeOpportunity({
