@@ -142,6 +142,10 @@ describe('ApiModeApp', () => {
     expect(screen.queryByText(/revision \d+/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add opportunity' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeInTheDocument();
+    const accountEmail = await screen.findByText('person@example.com');
+    expect(accountEmail).toHaveClass('lb-user-email');
+    expect(accountEmail).toHaveAttribute('title', 'person@example.com');
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
     expect(mocks.load).toHaveBeenCalledWith('all');
   });
 

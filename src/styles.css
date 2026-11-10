@@ -187,9 +187,10 @@
   color: #116a62; font-size: .8rem; font-weight: 800; text-transform: uppercase;
   border-radius: 11px; background: #e0f2ee;
 }
-.lb-user-copy { display: grid; gap: 1px; min-width: 0; }
-.lb-user-copy strong { max-width: 190px; overflow: hidden; color: #253a47; font-size: .76rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.lb-user-copy { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; width: min(190px, 18vw); min-width: 0; }
+.lb-user-copy strong { display: block; min-width: 0; max-width: 100%; overflow: hidden; color: #253a47; font-size: .76rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .lb-user-copy span { color: #8998a2; font-size: .66rem; }
+.lb-user-copy .lb-user-email { display: block; width: 100%; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lb-signout-button, .lb-migration-button {
   display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 12px;
   color: #536572; font-size: .76rem; font-weight: 650; white-space: nowrap; cursor: pointer;
@@ -512,7 +513,8 @@ dialog[aria-labelledby="modal-title"] {
   .lb-app-shell { grid-template-columns: 232px minmax(0, 1fr); }
   .lb-topbar { padding-inline: 24px; }
   .lb-topbar-actions { gap: 10px; }
-  .lb-user-copy strong { max-width: 145px; }
+  .lb-user-copy { width: 145px; }
+  .lb-user-copy strong { max-width: 100%; }
   .lb-content, .lb-local-content { padding-inline: 24px; }
 }
 

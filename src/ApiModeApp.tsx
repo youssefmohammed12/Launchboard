@@ -1106,7 +1106,11 @@ export default function ApiModeApp() {
               <div className="lb-user-copy">
                 <span>Signed in as</span>
                 <strong title={auth.state.user.email}>{accountDisplayName || auth.state.user.email}</strong>
-                {accountDisplayName && <span>{auth.state.user.email}</span>}
+                {accountDisplayName && (
+                  <span className="lb-user-email" title={auth.state.user.email}>
+                    {auth.state.user.email}
+                  </span>
+                )}
               </div>
             </div>
             <button
