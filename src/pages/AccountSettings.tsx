@@ -234,7 +234,14 @@ export function AccountSettings({ onAccountDeleted, onDisplayNameChange }: Props
             <input id="confirm-new-password" type="password" autoComplete="new-password" required minLength={15} maxLength={256} className="min-h-11 w-full rounded-control border border-border bg-bg px-s3 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/20" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
           </div>
           {passwordError && <Notice tone="error">{passwordError}</Notice>}
-          {passwordMessage && <Notice>{passwordMessage}</Notice>}
+          {passwordMessage && (
+            <>
+              <Notice>{passwordMessage}</Notice>
+              <p className="max-w-lg text-xs leading-5 text-muted">
+                Launchboard also attempts to send a security notification to your sign-in email after a password change. If you do not see it, check your Spam or Junk folder and mark it as “Not spam” if it appears there.
+              </p>
+            </>
+          )}
           <button type="submit" disabled={passwordBusy || !currentPassword || !newPassword || !confirmPassword} className="inline-flex min-h-10 items-center gap-s2 rounded-control bg-accent px-s4 text-sm font-semibold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-50">
             {passwordBusy && <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />}
             {passwordBusy ? 'Updating…' : 'Update password'}

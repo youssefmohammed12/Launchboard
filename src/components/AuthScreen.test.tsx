@@ -89,6 +89,7 @@ describe('API-mode AuthScreen account actions', () => {
     ));
     expect(await screen.findByText('Check your email for verification instructions.')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Check your email' })).toBeTruthy();
+    expect(screen.getByText(/If you were expecting an email but do not see it, check your Spam or Junk folder/)).toBeTruthy();
   });
 
   it('does not send a password reset when the two password entries differ', async () => {
@@ -124,6 +125,7 @@ describe('API-mode AuthScreen account actions', () => {
     expect(await screen.findByText(
       'If an account is eligible, instructions will be sent to its email address.',
     )).toBeTruthy();
+    expect(screen.getByText(/If you were expecting an email but do not see it, check your Spam or Junk folder/)).toBeTruthy();
   });
 
   it('allows a verification email to be resent from the registration confirmation screen', async () => {
@@ -144,5 +146,30 @@ describe('API-mode AuthScreen account actions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Resend verification email' }));
 
     await waitFor(() => expect(resendVerification).toHaveBeenCalledWith('person@example.test'));
+    expect(screen.getByText(/If you were expecting an email but do not see it, check your Spam or Junk folder/)).toBeTruthy();
+  });
+
+  it('shows the email-location reminder after a password reset completes', async () => {
+    window.history.pushState({}, '', '/#resetPassword=secret-reset-token');
+    vi.mocked(confirmPasswordReset).mockResolvedValue({
+      message: 'Your password has been changed. Sign in with your new password.',
+    });
+    renderScreen();
+
+    await screen.findByRole('heading', { name: 'Choose a new password' });
+    fireEvent.change(screen.getByLabelText('New password'), {
+      target: { value: 'a-new-long-password-for-launchboard' },
+    });
+    fireEvent.change(screen.getByLabelText('Confirm new password'), {
+      target: { value: 'a-new-long-password-for-launchboard' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Reset password' }));
+
+    expect(await screen.findByText(/Your password has been changed/)).toBeTruthy();
+    expect(screen.getByText(/If you were expecting an email but do not see it, check your Spam or Junk folder/)).toBeTruthy();
+    expect(confirmPasswordReset).toHaveBeenCalledWith(
+      'secret-reset-token',
+      'a-new-long-password-for-launchboard',
+    );
   });
 });

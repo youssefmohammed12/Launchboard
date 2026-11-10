@@ -97,6 +97,8 @@ describe('AccountSettings', () => {
       );
     });
     expect(await screen.findByText(/Other active sessions were signed out/)).toBeInTheDocument();
+    expect(screen.getByText(/Launchboard also attempts to send a security notification to your sign-in email/)).toBeInTheDocument();
+    expect(screen.getByText(/check your Spam or Junk folder/i)).toBeInTheDocument();
     expect(screen.getByLabelText('Current password')).toHaveValue('');
     expect(screen.getByLabelText('New password')).toHaveValue('');
     expect(screen.getByLabelText('Confirm new password')).toHaveValue('');

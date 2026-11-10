@@ -45,6 +45,7 @@ export function AuthScreen({
   const [linkToken, setLinkToken] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [showSpamHint, setShowSpamHint] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
 
   const isBusy = busy || actionBusy;
@@ -85,6 +86,7 @@ export function AuthScreen({
     setMode(next);
     setFormError(null);
     setStatusMessage(null);
+    setShowSpamHint(false);
     if (next !== 'reset') {
       setPassword('');
       setConfirmPassword('');
@@ -113,6 +115,7 @@ export function AuthScreen({
     if (isBusy) return;
     setFormError(null);
     setStatusMessage(null);
+    setShowSpamHint(false);
 
     if (mode === 'login' || mode === 'register') {
       const result = mode === 'login'
@@ -128,6 +131,7 @@ export function AuthScreen({
           result.message ??
             'If an account is eligible, verification instructions will be sent to its email address.',
         );
+        setShowSpamHint(true);
       }
       return;
     }
@@ -137,9 +141,11 @@ export function AuthScreen({
       if (mode === 'verification-sent') {
         const result = await resendVerification(email);
         setStatusMessage(result.message);
+        setShowSpamHint(true);
       } else if (mode === 'forgot') {
         const result = await requestPasswordReset(email);
         setStatusMessage(result.message);
+        setShowSpamHint(true);
       } else if (mode === 'reset') {
         if (password !== confirmPassword) {
           setFormError('Passwords do not match.');
@@ -151,6 +157,7 @@ export function AuthScreen({
         setConfirmPassword('');
         setMode('login');
         setStatusMessage(result.message);
+        setShowSpamHint(true);
       }
     } catch (error) {
       setFormError(error instanceof Error ? error.message : 'The request could not be completed.');
@@ -245,6 +252,11 @@ export function AuthScreen({
             {statusMessage && (
               <p role="status" className="mb-s4 rounded-control border border-border bg-bg p-s3 text-sm text-muted">
                 {statusMessage}
+              </p>
+            )}
+            {showSpamHint && (
+              <p className="-mt-s2 mb-s4 text-xs leading-5 text-muted">
+                If you were expecting an email but do not see it, check your Spam or Junk folder. If you find a Launchboard email there, mark it as “Not spam” so future messages are easier to find.
               </p>
             )}
 

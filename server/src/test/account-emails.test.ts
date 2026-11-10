@@ -23,6 +23,8 @@ describe('branded account email templates', () => {
     expect(message.html).toContain('href="https://launchboard.example/#verifyEmail=verification-token"');
     expect(message.html).toContain('24 hours');
     expect(message.html).toContain('Did not create a Launchboard account?');
+    expect(message.html).toContain('You received this email because you created a Launchboard account with this address.');
+    expect(message.text).toContain('You received this email because you created a Launchboard account with this address.');
   });
 
   it('creates a password reset email with the one-hour, single-use guidance', () => {
@@ -34,6 +36,8 @@ describe('branded account email templates', () => {
     expect(message.html).toContain('Reset password');
     expect(message.html).toContain('href="https://launchboard.example/#resetPassword=reset-token"');
     expect(message.html).toContain('Your current password will remain unchanged');
+    expect(message.html).toContain('You received this email because a password reset was requested for your Launchboard account.');
+    expect(message.text).toContain('You received this email because a password reset was requested for your Launchboard account.');
   });
 
   it('creates distinct password-change notices for resets and settings updates', () => {
@@ -54,6 +58,8 @@ describe('branded account email templates', () => {
     expect(settings.html).toContain('This browser remains signed in');
     expect(reset.html).toContain('If you did not make this change');
     expect(settings.html).toContain('If you did not make this change');
+    expect(reset.text).toContain('You received this email because your Launchboard account password was changed.');
+    expect(settings.text).toContain('You received this email because your Launchboard account password was changed.');
   });
 
   it('keeps token content URL-encoded rather than treating it as HTML', () => {

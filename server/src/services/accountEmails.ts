@@ -33,6 +33,7 @@ interface AccountEmailContent {
   buttonUrl?: string;
   details: string[];
   notice?: string;
+  reason: string;
 }
 
 function renderHtml(content: AccountEmailContent): string {
@@ -98,6 +99,7 @@ function renderHtml(content: AccountEmailContent): string {
           <tr>
             <td align="center" style="padding:22px 16px 0;">
               <p style="margin:0 0 7px;color:#78878c;font-size:12px;line-height:1.6;">This is an automated message from Launchboard. Please do not reply.</p>
+              <p style="margin:0 0 7px;color:#78878c;font-size:12px;line-height:1.6;">${escapeHtml(content.reason)}</p>
               <p style="margin:0;color:#9aa5a9;font-size:11px;line-height:1.6;">© Launchboard · Your opportunities, organized.</p>
             </td>
           </tr>
@@ -118,7 +120,7 @@ function createMessage(
   return {
     to,
     subject,
-    text: textLines.join('\n'),
+    text: [...textLines, '', content.reason].join('\n'),
     html: renderHtml(content),
   };
 }
@@ -144,6 +146,7 @@ export function createVerificationEmail(
         'Once your email is verified, you can sign in and start organizing your opportunities.',
       ],
       notice: 'Did not create a Launchboard account? You can safely ignore this email. No account will be activated through this message unless the verification link is used.',
+      reason: 'You received this email because you created a Launchboard account with this address.',
     },
     [
       'Welcome to Launchboard',
@@ -182,6 +185,7 @@ export function createPasswordResetEmail(
         'For your security, you will be asked to sign in again after your password has been changed.',
       ],
       notice: 'If you did not request a password reset, you can ignore this email. Your current password will remain unchanged.',
+      reason: 'You received this email because a password reset was requested for your Launchboard account.',
     },
     [
       'Launchboard password reset',
@@ -231,6 +235,7 @@ export function createPasswordChangedEmail(
       buttonUrl: url,
       details,
       notice: 'If you did not make this change, reset your password immediately using the “Forgot password?” option on the sign-in page.',
+      reason: 'You received this email because your Launchboard account password was changed.',
     },
     [
       heading,
