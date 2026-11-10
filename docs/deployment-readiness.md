@@ -490,3 +490,11 @@ This section records the original implementation/release-gate snapshot from befo
 - **No user data CRUD:** no opportunity or user rows were added, edited or deleted. The local XAMPP database was not used or changed.
 
 **Release boundary:** migration 007 is applied and must not be rerun. The application candidate still requires the exact-SHA Preview verification and Production deployment sequence described above.
+
+
+## 2026-11-10 — v1.3.5 Preview compiler compatibility correction
+
+- Initial exact-SHA Preview: `dpl_4xgtrDa19txGhULPsrrKwbYqUBT1`, URL `https://launchboard-dongmhbmx-youssef-workplace.vercel.app`, source SHA `a8457dd89e5e293465efb8a9a68bffbd9b7045b1`.
+- Vercel completed deployment and marked it READY, but its build log emitted a TypeScript `TS2550` diagnostic: `String.replaceAll` in the new email HTML escaper was outside the API catch-all's ES2020 library target. This Preview is not accepted as release evidence despite the READY state; Production was not deployed from it.
+- Replaced those five escaping operations with equivalent global regular-expression replacements, which are ES2020-compatible. A repository search confirmed no remaining `replaceAll(` usage in server source.
+- Post-correction local checks: backend **633/633** across 39 files; strict server typecheck passed; server production build passed. The next Preview must be built from the corrected follow-up commit and inspected for absence of this compiler diagnostic before any Production deployment.
